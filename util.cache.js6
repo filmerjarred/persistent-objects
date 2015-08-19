@@ -1,255 +1,242 @@
-var cache = service.cache = {
+var Persistient;
+(function(){
 
-    //Takes a value and set's it in the local cache. Will break if objects have circular references.
-    set:function(key, value, party = true){
-        if(key == undefined || key == null){
-            throw new Error("Key cannot be null");
+    var cache = {
+
+        //Takes a value and set's it in the local cache. Will break if objects have circular references.
+        set:function(key, value, party = true){
+            if(key == undefined || key == null){
+                throw new Error("Key cannot be null");
+            }
+
+            if(typeof value !== "string"){
+                value = JSON.stringify(value);
+            }
+
+            localStorage.setItem(key, value);
+        },
+        //Get's a object from the local cache
+        get:function(key){
+            if(key == undefined || key == null){
+                throw new Error("Key cannot be null");
+            }
+
+            var value = localStorage.getItem(key);
+
+            if(value === undefined || value === null){
+                return undefined;
+            }
+
+            if (value.charAt(0) === "{" || value.charAt(0) === "[" || util.isNumber(value) || util.isBoolean(value)) {
+                return JSON.parse(value);
+            } else {
+                return value;
+            }
+        },
+
+        clear:localStorage.removeItem.bind(localStorage),
+
+        clearAll:localStorage.clear.bind(localStorage),
+
+        push:function(key, value, checkIfExists){
+            var collection = this.get(key) || [];
+
+            if(checkIfExists && util.contains(collection, key)){
+                throw new Error("Cache array already has this key in it and we care.");
+                return;
+            }
+
+            collection.push(value);
+            this.set(key, collection);
+        },
+
+        pull:function(collectionKey, item){
+            if(collectionKey == undefined || collectionKey == null){
+                throw new Error("Key cannot be null");
+            }
+
+            var collection = this.get(collectionKey);
+            util.remove(collection, item);
+            this.set(collectionKey, collection)
         }
-
-        if(typeof value !== "string"){
-            value = JSON.stringify(value);
-        }
-
-        localStorage.setItem(key, value);
-    },
-    //Get's a object from the local cache
-    get:function(key){
-        if(key == undefined || key == null){
-            throw new Error("Key cannot be null");
-        }
-
-        var value = localStorage.getItem(key);
-
-        if(value === undefined || value === null){
-            return undefined;
-        }
-
-        if (value.charAt(0) === "{" || value.charAt(0) === "[" || util.isNumber(value) || util.isBoolean(value)) {
-            return JSON.parse(value);
-        } else {
-            return value;
-        }
-    },
-
-    clear:localStorage.removeItem.bind(localStorage),
-
-    clearAll:localStorage.clear.bind(localStorage),
-
-    push:function(key, value, checkIfExists){
-        var collection = this.get(key) || [];
-
-        if(checkIfExists && util.contains(collection, key)){
-            throw new Error("Cache array already has this key in it and we care.");
-            return;
-        }
-
-        collection.push(value);
-        this.set(key, collection);
-    },
-
-    pull:function(collectionKey, item){
-        if(collectionKey == undefined || collectionKey == null){
-            throw new Error("Key cannot be null");
-        }
-
-        var collection = this.get(collectionKey);
-        util.remove(collection, item);
-        this.set(collectionKey, collection)
-    }
-}
-
-//================ Cachification ==========================
-
-var types = {
-    "object":Object
-};
-
-service.registerType = function(type){
-    types[type.name.toLowerCase()] = type;
-}
-
-//Takes a object with data in it and saves it to the cache
-service.save = function(parentCID = "", obj){
-
-    if(!obj.id){
-        throw new Error("Objects need ids!")
     }
 
-    Object.defineProperty(obj, "cid", {value:parentCID + "." + obj.id});
+    //================ Cachification ==========================
 
-    getKeys(obj).forEach(childKey => {
+    var types = {
+        "object":Object
+    };
 
-        if(util.isObject(obj[childKey])){
-            Object.defineProperty(obj[childKey], "id", {value:childKey});
-            service.save(obj.cid, obj[childKey]);
-        } else {
-            cache.set(obj.cid + "." + childKey, obj[childKey]);
-            cacheProperty(obj, childKey, obj.cid + "." + childKey);
+    function registerType(type){
+        types[type.name.toLowerCase()] = type;
+    }
+
+    //Takes a object with data in it and saves it to the cache
+    function save(parentCID = "", obj){
+
+        if(!obj.id){
+            throw new Error("Objects need ids!")
         }
-    })
 
-    saveObjInfo(obj);
-    watchForChanges(obj);
-}
+        Object.defineProperty(obj, "cid", {value:parentCID + "." + obj.id});
 
-//Takes an id, and returns the corresponding object from the cache
-service.load = function(cid){
-    var objInfo = util.isObject(cid) ? cid : cache.get(cid);
+        getKeys(obj).forEach(childKey => {
 
-    if(!objInfo){
-        return false;
-    }
-
-    var obj = objInfo.type ? new types[objInfo.type]() : {};
-
-    Object.defineProperty(obj, "cid", {value:objInfo.cid});
-    Object.defineProperty(obj, "id", {value:objInfo.id});
-
-    objInfo.keys.forEach(key => {
-        var childCID = genCID(obj, key);
-        var value = cache.get(childCID);
-
-        if(util.isObject(value)){ //If the property is an object it will be the object info of an object
-            obj[key] = service.load(value);
-        } else {
-            cacheProperty(obj, key, childCID);
-        }
-    });
-
-    watchForChanges(obj);
-
-    return obj;
-}
-
-service.destroy = function(obj){
-    throw new Error("Not implimented")
-    // getKeys(obj).forEach(key => {
-    //     obj[key].destroy && obj[key].destroy();
-    //     cache.clear(genCID(obj, key));
-    // })
-}
-
-function genCID(obj, key){
-    if(obj.cid === undefined){
-        throw new Error("This object is cid less!", obj);
-    }
-
-    return obj.cid + "." + key;
-}
-
-function getKeys(obj){
-    return util.diff(Object.keys(obj), obj.dontCache);
-}
-
-function saveObjInfo(obj){
-    if(obj.cid === undefined){
-        throw new Error("This object is cid less!", obj);
-    }
-
-    cache.set(obj.cid, {type: obj.constructor.name.toLowerCase(), keys:getKeys(obj), cid:obj.cid, id:obj.id});
-}
-
-function watchForChanges(obj){
-    Object.observe(obj, changes => {
-        changes.forEach(change => {
-            if(!util.contains(obj.dontCache, change.name)){
-                var value = change.object[change.name];
-
-                if(change.type == "add"){
-
-                    if(util.isObject(value)){
-                        Object.defineProperty(value, "id", {value:change.name});
-                        service.save(obj.cid, value);
-                    } else {
-                        cache.set(genCID(obj, change.name), value);
-                        cacheProperty(obj, change.name, genCID(obj, change.name));
-                    }
-
-
-                } else if (change.type == "delete"){
-                    change.oldValue.destroy && change.oldValue.destroy();   //If it was an object(ie, had a destroy function), then take care of it from the cache.
-                }
-                saveObjInfo(obj);
+            if(util.isObject(obj[childKey])){
+                Object.defineProperty(obj[childKey], "id", {value:childKey});
+                save(obj.cid, obj[childKey]);
+            } else {
+                cache.set(obj.cid + "." + childKey, obj[childKey]);
+                cacheProperty(obj, childKey, obj.cid + "." + childKey);
             }
         })
-    }, ["add", "delete"]);
-    
-}
 
-function cacheProperty(obj, key, accessKey){
-    obj.__defineGetter__(key, function(){
-        return cache.get(accessKey);
-    })
-
-    obj.__defineSetter__(key, function(value){
-        cache.set(accessKey, value);
-    })
-}
-
-class Service{
-    constructor(opts){
-        this.chosen;            
-        this.items = opts.items;
-        this.type = opts.type;
-        this.typeName = this.type.name.toLowerCase()
-        this.cid = opts.prefix + "." + this.typeName + "s"
-
-        service.registerType(opts.type);
+        saveObjInfo(obj);
+        watchForChanges(obj);
     }
 
-    load(){
-        this.items = service.load(this.cid);
+    //Takes an id, and returns the corresponding object from the cache
+    function load(cid){
+        var objInfo = util.isObject(cid) ? cid : cache.get(cid);
 
-        if(!this.items){
-            this.items = {nextID:1};
-            service.save(this.cid, this.items);
-        } 
-            
-        return this.items;
-    }
-
-    new(){
-        var item = new this.type();
-        this.items[this.items.nextID++] = item;
-    }
-
-    destroy(item){
-        if(this.chosen === item){
-            this.chosen = null;
+        if(!objInfo){
+            return false;
         }
-        delete this.items[item.id]; //Will trigger the object watch on the items obj
+
+        var obj = objInfo.type ? new types[objInfo.type]() : {};
+
+        Object.defineProperty(obj, "cid", {value:objInfo.cid});
+        Object.defineProperty(obj, "id", {value:objInfo.id});
+
+        objInfo.keys.forEach(key => {
+            var childCID = genCID(obj, key);
+            var value = cache.get(childCID);
+
+            if(util.isObject(value)){ //If the property is an object it will be the object info of an object
+                obj[key] = load(value);
+            } else {
+                cacheProperty(obj, key, childCID);
+            }
+        });
+
+        watchForChanges(obj);
+
+        return obj;
     }
 
-    get(id){
-        return this.items[id];
+    function destroy(obj){
+        // getKeys(obj).forEach(key => {
+        //     obj[key].destroy && obj[key].destroy();
+        //     cache.clear(genCID(obj, key));
+        // })
     }
 
-    choose(item){
-        this.chosen = item;
-    }        
+    function genCID(obj, key){
+        if(obj.cid === undefined){
+            throw new Error("This object is cid less!", obj);
+        }
+
+        return obj.cid + "." + key;
+    }
+
+    function getKeys(obj){
+        return util.diff(Object.keys(obj), obj.dontCache);
+    }
+
+    function saveObjInfo(obj){
+        if(obj.cid === undefined){
+            throw new Error("This object is cid less!", obj);
+        }
+
+        cache.set(obj.cid, {type: obj.constructor.name.toLowerCase(), keys:getKeys(obj), cid:obj.cid, id:obj.id});
+    }
+
+    function watchForChanges(obj){
+        Object.observe(obj, changes => {
+            changes.forEach(change => {
+                if(!util.contains(obj.dontCache, change.name)){
+                    var value = change.object[change.name];
+
+                    if(change.type == "add"){
+
+                        if(util.isObject(value)){
+                            Object.defineProperty(value, "id", {value:change.name});
+                            save(obj.cid, value);
+                        } else {
+                            cache.set(genCID(obj, change.name), value);
+                            cacheProperty(obj, change.name, genCID(obj, change.name));
+                        }
+
+
+                    } else if (change.type == "delete"){
+                        change.oldValue.destroy && change.oldValue.destroy();   //If it was an object(ie, had a destroy function), then take care of it from the cache.
+                    }
+                    saveObjInfo(obj);
+                }
+            })
+        }, ["add", "delete"]);
+    }
+
+    function cacheProperty(obj, key, accessKey){
+        obj.__defineGetter__(key, function(){
+            return cache.get(accessKey);
+        })
+
+        obj.__defineSetter__(key, function(value){
+            cache.set(accessKey, value);
+        })
+    }
+
+    class _Persistient{
+        constructor(id){
+            if(this.constructor != Object){
+                registerType(this.constructor);
+            }
+            this.id = id;
+            if(cache.get('.' + id)){
+                return load("." + id);
+            } else {
+                save("", this);
+            }
+        }
+
+        static save(){
+            save.apply(null, arguments);
+        }
+
+        static load(){
+            return load.apply(null, arguments);
+        }
+    }
+
+    Persistient = _Persistient;
+
+    // //============ Redis To Cache ==========================
+    // // var connection = io("http://localhost:3000/", {query:"name=asdf", 'force new connection':true});
+
+
+    // var partying = false;
+    // var partyPulse = 2000;
+
+    // //Bassicaly sends a list of changes to the server every {{partyPulse}}
+    // function initCountdownToParty(){
+    //     if(!partying){
+    //         partying = true;
+
+    //         setTimeout(function(){
+    //             connection.emit("set", setRecords);
+    //             revise("revision");
+    //             setRecords = {};
+    //             partying = false;
+    //         }, partyPulse)
+    //     }
+    // }
+
+})()
+
+class Person extends Persistient{
+    constructor(name){
+        super(name);
+        this.name = name;
+    }
 }
-
-    return this;
-
-
-// //============ Redis To Cache ==========================
-// // var connection = io("http://localhost:3000/", {query:"name=asdf", 'force new connection':true});
-
-
-// var partying = false;
-// var partyPulse = 2000;
-
-// //Bassicaly sends a list of changes to the server every {{partyPulse}}
-// function initCountdownToParty(){
-//     if(!partying){
-//         partying = true;
-
-//         setTimeout(function(){
-//             connection.emit("set", setRecords);
-//             revise("revision");
-//             setRecords = {};
-//             partying = false;
-//         }, partyPulse)
-//     }
-// }
-
