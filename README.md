@@ -4,7 +4,7 @@ Warning: Halfbaked mad science.
 
 In the first lecture of my first web development course, we were told that javascript had a short memory, and shouldn't be expected to stick around after page refreshes. I made a note to find a way around that when I'd had enough experience, and now that I have, I built this!
 
-# installation
+# Installation
 
 ```html
     <script type = "application/javascript" src = "lodash.js"></script>
@@ -51,7 +51,7 @@ var hermoine = Wizard.load("Hermoine Granger");
 var ron = Wizard.load("Ron Weasly");
 
 hermoine.friends //{"Ron Weasly":ron}
-ron.friends //{"Ron Weasly":ron}
+ron.friends //{"Hermoine Granger":hermoine}
 
 hermoine.friends["Ron Weasly"] === ron; //true
 
