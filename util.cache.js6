@@ -176,24 +176,40 @@ function registerType(type){
 
                 if(!_.includes(obj.dontCache, childKey)){
 
-                    if(change.type == "add"){
+                    if(change.type == "add" && (childKey in obj)){
                         if(childValue.cid){
                             obj.adoptedCIDs.push(childValue.cid);
                         } else {
                             cacheProperty(obj, "MODEL", childKey);
                         }
+                    } else if (change.type == "delete"){
+                        //If it was an object then take care of it from the cache.
+                        if(_.isObject(change.oldValue)){
+                            destroy(change.oldValue)
+                        } else {
+                            cache.clear(childCID);
+                        }
                     }
 
-                    // else if (change.type == "delete"){
-                    //     change.oldValue.destroy && change.oldValue.destroy();   //If it was an object(ie, had a destroy function), then take care of it from the cache.
-                    // }
-
-                    updateObjInfo(obj)    //MAKE SURE IF YOU'RE DESTROYING IT, YOU OBLITERATE THE KEY
+                    updateObjInfo(obj)
                 }
             })
 
 
         }, ["add", "delete"]);
+    }
+
+    function destroy(obj){
+        var childIDs = obj.childIDs;
+
+        for(var i in childIDs){
+            if(_.isObject(obj[childIDs[i]])){
+                destroy(obj[childIDs[i]]);
+            }
+            cache.clear(childIDs[i]);
+        }
+
+        cache.clear(obj.cid);
     }
 
     //okay, so if you're trying to cache a child that's already a thing, adopt it instead.

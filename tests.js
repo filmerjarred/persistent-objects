@@ -145,6 +145,23 @@ describe("A Persistient Object", function () {
         expect(a.b).toBe(2);
     });
 
+    it("Should delete the property in the chache if it's deleted in the model", function (done) {
+        var a = Persistient.create("A");
+        a.b = 1;
+        expect(a.b).toBe(1);
+
+        emulateRefresh(function () {
+            expect(localStorage.getItem("A.b")).toBe('1');
+
+            delete a.b;
+
+            emulateRefresh(function () {
+                expect(localStorage.getItem("A.b")).toBe(null);
+                done();
+            });
+        });
+    });
+
     it("Should override anything before it when created", function () {
         var a = Persistient.create("A");
         a.b = 1;
@@ -179,7 +196,6 @@ describe("A Persistient Object", function () {
     });
 
     it("Should 'load or new' an item when using 'new' syntax", function (done) {
-
         expect(Persistient.load("A")).toBe(undefined);
 
         var a = new Persistient("A");
