@@ -20,6 +20,7 @@ function registerType(type) {
 }
 
 //babel --watch util.cache.js6 --out-file persistient.js
+
 (function () {
 
     //Functions for accessing local system cache.
@@ -244,20 +245,21 @@ function registerType(type) {
      *
      *  Persistient({id:id, dontCache:[]})
      *
-     */
+    */
 
     var _Persistient = (function () {
-        function _Persistient(args) {
+        function _Persistient(id) {
             _classCallCheck(this, _Persistient);
 
-            return 1;
-            // if(!_.isObject(args)){
-            //     args = {cid:args, dontCache:this.dontCache};
-            // }
+            if (id) {
+                var exists = !!cache.get(id);
 
-            // if(args.dontCache){
-            //     Object.defineProperty(this, "dontCache", {value:args.dontCache, writeable:true});
-            // }
+                if (exists) {
+                    align({ cid: id, obj: this, source: "CACHE" });
+                } else {
+                    align({ cid: id, obj: this, source: "MODEL" });
+                }
+            }
         }
 
         //'this' will be whatever the object that called us was.

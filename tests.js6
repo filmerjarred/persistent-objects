@@ -2,7 +2,7 @@
 
 class Wizard extends Persistient{
     constructor(name){
-        super(name);
+        super();
         this.name = name;
         this.friends = {};
     }
@@ -23,8 +23,11 @@ describe('A wizard:', function() {
     var item;
     var changed;
 
-    afterEach(function(){
-        localStorage.clear();
+    afterEach(function(done){
+        emulateRefresh(function(){
+            localStorage.clear.bind(localStorage)
+            done();
+        });
     })
 
 
@@ -76,28 +79,14 @@ describe('A wizard:', function() {
             done();
         });
     })
-
-    it("Should override anything before it when created", function(){
-        var moody = Wizard.create("Mad Eyed Moody");
-        moody.compromised = false;
-
-        var moody = Wizard.create("Mad Eyed Moody");
-        expect(moody.compromised).toBe(undefined);
-    })
-
-    it("Shouldn't exist", function(){
-        var jarred = Wizard.load("Jarred Filer");
-        expect(jarred).toBe(undefined); //*sob*
-    })
-
-    it("Should remember the type of their age", function(){
-        expect(true).toBe(true);
-    })
 })
 
 describe("A muggle:", function(){
-    afterEach(function(){
-        localStorage.clear();
+    afterEach(function(done){
+        emulateRefresh(function(){
+            localStorage.clear.bind(localStorage)
+            done();
+        });
     })
 
     it("Should save and load", function(){
@@ -111,5 +100,83 @@ describe("A muggle:", function(){
         var jarred = Persistient.load("Jarred Filmer");
 
         expect(jarred.age).toBe(22);
+    })
+})
+
+describe("A Persistient Object", function(){
+    afterEach(function(done){
+        emulateRefresh(function(){
+            localStorage.clear(localStorage)
+            done();
+        });
+    })
+
+    it("Should write it's properties to the localStorage", function(){
+        expect(localStorage.getItem("A.b")).toBe(null);
+        var a = Persistient.save("A", {b:1});
+        a.b++;
+        expect(localStorage.getItem("A.b")).toBe('2');
+    })
+
+    it("Should get it's properties direct from localStorage", function(){
+        expect(localStorage.getItem("A.b")).toBe(null);
+        var a = Persistient.save("A", {b:1});
+        expect(a.b).toBe(1);
+
+        localStorage.setItem("A.b", 2)
+        expect(a.b).toBe(2);
+    })
+
+    it("Should override anything before it when created", function(){
+        var a = Persistient.create("A");
+        a.b = 1;
+
+        var a = Persistient.create("a");
+        expect(a.b).toBe(undefined);
+    })
+
+    it("Should be undefined if it dosn't exist", function(){
+        var a = Persistient.load("a");
+        expect(a).toBe(undefined);
+    })
+
+    it("Should cast numeric strings to integers", function(done){
+        var a = Persistient.create("A");
+        a.b = 1;
+        a.c = "1";
+        expect(a.b).toBe(1);
+        expect(_.isNumber(a.b)).toBe(true);
+        expect(a.c).toBe("1");
+        expect(_.isNumber(a.c)).toBe(false);
+
+        emulateRefresh(function(){
+            var a = Persistient.load("A");
+
+            expect(a.b).toBe(1);
+            expect(_.isNumber(a.b)).toBe(true);
+            expect(a.c).toBe(1);
+            expect(_.isNumber(a.c)).toBe(true);
+            done()
+        });
+    })
+
+    it("Should 'load or new' an item when using 'new' syntax", function(done){
+
+        expect(Persistient.load("A")).toBe(undefined);
+
+        var a = new Persistient("A");
+        expect(a.b).toBe(undefined);
+        a.b = 1;
+
+        emulateRefresh(function(){
+            expect(Persistient.load("A").b).toBe(1);
+
+            emulateRefresh(function(){
+                var a = new Persistient("A");
+                expect(a.b).toBe(1);
+                done();
+            })
+        })
+
     })
 })
