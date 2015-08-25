@@ -1,10 +1,9 @@
-var Persistient;
-
 var loadedItems = {
 };
 
 var types = {
-    "object":Object
+    "object":Object,
+    "array":Array
 };
 
 function registerType(type){
@@ -13,7 +12,7 @@ function registerType(type){
 
 //babel --watch util.cache.js6 --out-file persistient.js
 
-(function(){
+// (function(){
 
     //Functions for accessing local system cache.
     var cache = {
@@ -77,6 +76,18 @@ function registerType(type){
     }
 
 
+    //Is it a problem that we have to allow for objects that are aligned by the time the super call finishes?
+    //Because i mean, we could also keep the 'new' stuff, and delay the alignment till after the instantiation, which should in theory be fine?
+    //No, because we expect loaded items to have all their properties straight after, which only happen in you sync align.
+    //So what are the problems with aligning before the super call's finished?
+    //
+    //1. We have to pass the id into the super, which is only just bearable.
+    //2. Item's we defined in the constructor will be cached only after call stack is clear, but it will use whatever value it is at the time, so the obj won't become inaccurate
+    //So yeah, I think aligning the object during the object works out, you just have to always pass the id.
+    //So should we always do it?
+
+
+
     //================ Cachification ==========================
 
 
@@ -98,7 +109,7 @@ function registerType(type){
                 return undefined;
             }
             var child = (types[childInfo.type] && new types[childInfo.type]) || {};
-            loadedItems[cid] = child;
+            // loadedItems[cid] = child;
             return align({obj:child, cid:cid, source:"CACHE"});
         }
     }
@@ -121,14 +132,22 @@ function registerType(type){
 
         obj.disownedIDs = ["childIDs", "cid", "id", "disownedIDs", "adoptedCIDs"].concat(obj.dontCache); //Node of the disowned properties will be cached. THEY ARE NO CHILDREN OF MINE!
 
-        obj.adoptedCIDs = obj.adoptedCIDs || [];
+        obj.adoptedCIDs = obj.adoptedCIDs || {};
 
         obj.__defineGetter__("childIDs", function(){
-            return _.difference(Object.keys(this), this.disownedIDs.concat(this.adoptedCIDs));
+            return _.difference(Object.keys(this), this.disownedIDs.concat(Object.keys(this.adoptedCIDs)));
         })
+
+        loadedItems[obj.cid] = obj;
 
         //If the model is our source, then write the object keys and type. Else, take the key list from the cache and assign them.
         if(args.source === "MODEL"){
+            //check for adopted ids
+            for(var i in obj){
+                if(obj[i].cid){
+                    obj.adoptedCIDs[i] = obj[i].cid;
+                }
+            }
             updateObjInfo(obj);
         } else if (args.source === "CACHE"){
             var info = cache.get(obj.cid);
@@ -137,7 +156,11 @@ function registerType(type){
                 return undefined;
             }
 
-            obj.adoptedCIDs = obj.adoptedCIDs.concat(info.adoptedCIDs);
+            obj.adoptedCIDs = obj.adoptedCIDs || {};
+
+            for(var i in info.adoptedCIDs){
+                obj.adoptedCIDs[i] = info.adoptedCIDs[i];
+            }
 
 
             for(var i in info.childIDs){ //Give the object each key, so that it's obj.info.childIDs getter gives the correct values.
@@ -147,15 +170,16 @@ function registerType(type){
             throw new Error("Invalid source!")
         }
 
+
         //Goes through and links each property. If the property value is an object, align it, i
         obj.childIDs.forEach(cacheProperty.bind(null, obj, args.source));
 
-        obj.adoptedCIDs && obj.adoptedCIDs.forEach((cid) => {
-            var child = load(cid);
-            obj[child.id] = child;
-        });
+        for(var i in obj.adoptedCIDs){
+            obj[i] = load(obj.adoptedCIDs[i]);;
+        }
 
         watchForChanges(obj);
+
 
         return obj;
     }
@@ -170,17 +194,31 @@ function registerType(type){
         Object.observe(obj, changes => {
 
             changes.forEach(change => {
-                var childKey = change.name;
+                var childID = change.name;
                 var childValue = change.object[change.name];
-                var childCID = obj.cid + "." + childKey;
+                var childCID = obj.cid + "." + childID;
 
-                if(!_.includes(obj.dontCache, childKey)){
+                if(!_.includes(obj.dontCache, childID)){
 
-                    if(change.type == "add" && (childKey in obj)){
+                    if(change.type == "add" && (childID in obj)){
                         if(childValue.cid){
-                            obj.adoptedCIDs.push(childValue.cid);
+                            obj.adoptedCIDs[childID] = childValue.cid;
+
+                            obj.__defineSetter__(childID, function(value){
+                                //A value that used to be an object is now a flat value or a different object
+                                obj.adoptedCIDs[childID] = value.cid;
+
+                                childValue = value;
+
+                                // cacheProperty(obj, "MODEL", childID);
+                                return value;
+                            })
+
+                            obj.__defineGetter__(childID, function(){
+                                return childValue;
+                            })
                         } else {
-                            cacheProperty(obj, "MODEL", childKey);
+                            cacheProperty(obj, "MODEL", childID);
                         }
                     } else if (change.type == "delete"){
                         //If it was an object then take care of it from the cache.
@@ -228,10 +266,27 @@ function registerType(type){
         //If what's already there is an object, or the source is the cache and there's an obj in the cache in this position.
         if(childIsObject){
             if(source === "MODEL"){
-                obj[childID] = align({obj:childValue, cid:childCID, source:source});
+                var child = align({obj:childValue, cid:childCID, source:source});
             } else {
-                obj[childID] = load(childCID);
+                var child = load(childCID);
             }
+
+            //Any time the actual object property is written to directly, safe to assume we want
+            //to delete the whole thing and re assign.
+            obj.__defineSetter__(childID, function(value){
+                //A value that used to be an object is now a flat value or a different object
+                delete obj[childID];
+
+                obj[childID] = value;
+
+                // cacheProperty(obj, "MODEL", childID);
+                return value;
+            })
+
+            obj.__defineGetter__(childID, function(){
+                return child;
+            })
+
         } else {
 
             if(!_.includes(obj.childIDs, childID) || _.includes(obj.disownedIDs, childID)){
@@ -247,8 +302,15 @@ function registerType(type){
                 return cache.get(childCID);
             })
 
+
             obj.__defineSetter__(childID, function(value){
-                cache.set(childCID, value);
+                // //A property that used to be a flat value has been made an object or array
+                if(typeof (value) == "object"){
+                    delete obj[childID];
+                    obj[childID] = value;
+                } else {
+                    cache.set(childCID, value);
+                }
                 return value;
             })
         }
@@ -261,7 +323,7 @@ function registerType(type){
      *
     */
 
-    class _Persistient{
+    class Persistient{
         constructor(id){
             if(id){
                 var exists = !!cache.get(id);
@@ -274,20 +336,23 @@ function registerType(type){
             }
         }
 
+        static loadOrCreate(id){
+
+        }
+
         //'this' will be whatever the object that called us was.
         static create(id){
-            var obj = new this(...arguments);
 
-            align({obj:obj, cid:id, source:"MODEL"});
+            var exists = cache.get(id);
 
-            return obj;
+            if(exists){
+                destroy(exists);
+            }
+
+            return new this(...arguments);
         }
 
         static load(id){
-            // var obj = new this();
-
-            // align({obj:obj, cid:id, source:"CACHE"});
-
             return load(id);
         }
 
@@ -296,7 +361,12 @@ function registerType(type){
         }
     }
 
-    Persistient = _Persistient;
+    // for(var i in window){
+    //     if(window[i] && window[i].prototype instanceof Persistient){
+    //         registerType(window[i]);
+    //     }
+    // }
+
 
     // //============ Redis To Cache ==========================
     // // var connection = io("http://localhost:3000/", {query:"name=asdf", 'force new connection':true});
@@ -305,7 +375,7 @@ function registerType(type){
     // var partying = false;
     // var partyPulse = 2000;
 
-    // //Bassicaly sends a list of changes to the server every {{partyPulse}}
+    // //Basicaly sends a list of changes to the server every {{partyPulse}}
     // function initCountdownToParty(){
     //     if(!partying){
     //         partying = true;
@@ -320,21 +390,4 @@ function registerType(type){
     // }
 
 
-})()
-
-//okay, so what happens when we add an already cached object to a cached object
-//so we could keep a global store of cached objects?
-//and if it's already in there, just point to that.
-
-
-
-// var hermoine = Wizard.load("Hermoine Granger");
-// var ron = Wizard.load("Ron Weasly");
-
-// hermoine.befriend(ron);
-// ron.befriend(hermoine);
-
-// console.log(hermoine.friends["Ron Weasly"] === ron); //true
-// console.log(ron.friends["Hermoine Granger"] === hermoine); //true
-
-// ron.petType = "Lost";
+// })()

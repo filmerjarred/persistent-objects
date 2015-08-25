@@ -1,5 +1,3 @@
-// jasmine.DEFAULT_TIMEOUT_INTERVAL = 5000;
-
 "use strict";
 
 var _createClass = (function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; })();
@@ -10,13 +8,15 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
 
 function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) subClass.__proto__ = superClass; }
 
+jasmine.DEFAULT_TIMEOUT_INTERVAL = 1000;
+
 var Wizard = (function (_Persistient) {
     _inherits(Wizard, _Persistient);
 
     function Wizard(name) {
         _classCallCheck(this, Wizard);
 
-        _get(Object.getPrototypeOf(Wizard.prototype), "constructor", this).call(this);
+        _get(Object.getPrototypeOf(Wizard.prototype), "constructor", this).call(this, name);
         this.name = name;
         this.friends = {};
     }
@@ -34,7 +34,13 @@ var Wizard = (function (_Persistient) {
 registerType(Wizard);
 
 function emulateRefresh(done) {
-    loadedItems = {};
+    fireObjectObserves(function () {
+        loadedItems = {};
+        done();
+    });
+}
+
+function fireObjectObserves(done) {
     setTimeout(done, 0);
 }
 
@@ -44,7 +50,7 @@ describe('A wizard:', function () {
 
     afterEach(function (done) {
         emulateRefresh(function () {
-            localStorage.clear.bind(localStorage);
+            localStorage.clear(localStorage);
             done();
         });
     });
@@ -64,11 +70,11 @@ describe('A wizard:', function () {
 
         expect(hermoine.name).toBe("Hermoine Granger");
 
-        emulateRefresh();
+        emulateRefresh(function () {
+            var hermoine = Wizard.load("Hermoine Granger");
 
-        var hermoine = Wizard.load("Hermoine Granger");
-
-        expect(hermoine.name).toBe("Hermoine Granger");
+            expect(hermoine.name).toBe("Hermoine Granger");
+        });
     });
 
     it("Should be able to make and remember friends", function (done) {
@@ -97,12 +103,31 @@ describe('A wizard:', function () {
             done();
         });
     });
+
+    it("Should be able to noad", function (done) {
+        expect(Wizard.load("Harry Potter")).toBe(undefined);
+
+        var harry = new Wizard("Harry Potter");
+
+        expect(harry.petType).toBe(undefined);
+        harry.petType = "Owl";
+
+        emulateRefresh(function () {
+            expect(Wizard.load("Harry Potter").petType).toBe("Owl");
+
+            emulateRefresh(function () {
+                var harry = new Wizard("Harry Potter");
+                expect(harry.petType).toBe("Owl");
+                done();
+            });
+        });
+    });
 });
 
 describe("A muggle:", function () {
     afterEach(function (done) {
         emulateRefresh(function () {
-            localStorage.clear.bind(localStorage);
+            localStorage.clear(localStorage);
             done();
         });
     });
@@ -113,11 +138,11 @@ describe("A muggle:", function () {
 
         jarred.age++;
 
-        emulateRefresh();
+        emulateRefresh(function () {
+            var jarred = Persistient.load("Jarred Filmer");
 
-        var jarred = Persistient.load("Jarred Filmer");
-
-        expect(jarred.age).toBe(22);
+            expect(jarred.age).toBe(22);
+        });
     });
 });
 
@@ -145,17 +170,46 @@ describe("A Persistient Object", function () {
         expect(a.b).toBe(2);
     });
 
+    it("Should deal with adopting objects that are already cached", function (done) {
+        var a = Persistient.create("A");
+        var b = Persistient.create("B");
+        a.b = b;
+        b.c = 1;
+        expect(a.b.c).toBe(1);
+
+        emulateRefresh(function () {
+            var a = Persistient.load("A");
+            expect(a.b.c).toBe(1);
+            done();
+        });
+    });
+
+    it("Should deal with adding objects that contain objects are already cached", function (done) {
+        var a = Persistient.create("A");
+        var b = Persistient.create("B");
+
+        a.b = { b: b };
+        b.c = 1;
+        expect(a.b.b.c).toBe(1);
+
+        emulateRefresh(function () {
+            var a = Persistient.load("A");
+            expect(a.b.b.c).toBe(1);
+            done();
+        });
+    });
+
     it("Should delete the property in the chache if it's deleted in the model", function (done) {
         var a = Persistient.create("A");
         a.b = 1;
         expect(a.b).toBe(1);
 
-        emulateRefresh(function () {
+        fireObjectObserves(function () {
             expect(localStorage.getItem("A.b")).toBe('1');
 
             delete a.b;
 
-            emulateRefresh(function () {
+            fireObjectObserves(function () {
                 expect(localStorage.getItem("A.b")).toBe(null);
                 done();
             });
@@ -212,4 +266,188 @@ describe("A Persistient Object", function () {
             });
         });
     });
+
+    it("Should create and load deeply nested circular objects", function (done) {
+        var A = (function (_Persistient2) {
+            _inherits(A, _Persistient2);
+
+            function A(id) {
+                _classCallCheck(this, A);
+
+                _get(Object.getPrototypeOf(A.prototype), "constructor", this).call(this, id);
+                this.value;
+                this.bs = {};
+            }
+
+            return A;
+        })(Persistient);
+
+        var B = (function (_Persistient3) {
+            _inherits(B, _Persistient3);
+
+            function B(id) {
+                _classCallCheck(this, B);
+
+                _get(Object.getPrototypeOf(B.prototype), "constructor", this).call(this, id);
+                this.value;
+                this.cs = {};
+            }
+
+            return B;
+        })(Persistient);
+
+        var C = (function (_Persistient4) {
+            _inherits(C, _Persistient4);
+
+            function C(id) {
+                _classCallCheck(this, C);
+
+                _get(Object.getPrototypeOf(C.prototype), "constructor", this).call(this, id);
+                this.value;
+                this.as = {};
+            }
+
+            return C;
+        })(Persistient);
+
+        var a = A.create("a");
+        var b = B.create("b");
+        var c = C.create("c");
+
+        a.bs['b'] = b;
+        b.cs['c'] = c;
+        c.as['a'] = a;
+
+        a.value = 1;
+        a.bs.b.value = 2;
+        a.bs.b.cs.c.value = 3;
+        a.bs.b.cs.c.as.a.value = 4;
+
+        emulateRefresh(function () {
+            var a = A.load("a");
+            var b = B.load("b");
+            var c = C.load("c");
+
+            expect(a.value).toBe(4);
+            expect(b.value).toBe(2);
+            expect(c.value).toBe(3);
+            done();
+        });
+    });
+
+    it("Should handle object properties changing to other objects", function (done) {
+        var a = Persistient.create("A");
+        var b = Persistient.create("B");
+        // var c = Persistient.create("C");
+        var d = Persistient.create("D");
+
+        a.b = b;
+        // a.c = {c:c};
+
+        b.value = 1;
+        // c.value = 2;
+        d.value = 3;
+
+        expect(a.b.value).toBe(1);
+        // expect(a.c.c.value).toBe(2);
+        expect(d.value).toBe(3);
+
+        emulateRefresh(function () {
+            var a = Persistient.load("A");
+            var b = Persistient.load("B");
+            // var c = Persistient.load("C");
+            var d = Persistient.load("D");
+
+            expect(a.b.value).toBe(1);
+            // expect(a.c.c.value).toBe(2);
+            expect(d.value).toBe(3);
+
+            a.b = d;
+            // a.c.c = d;
+
+            emulateRefresh(function () {
+                var a = Persistient.load("A");
+
+                expect(a.b.value).toBe(3);
+                // expect(a.c.c.value).toBe(3);
+
+                done();
+            });
+        });
+    });
+
+    it("Should handle adopted objects being changed", function () {
+        expect(true).toBe(false);
+    });
+
+    it("Should handle having a number property changed to an object", function (done) {
+
+        var a = Persistient.create("A");
+
+        a.b = 1;
+        // a.c = {d:1};
+
+        fireObjectObserves(function () {
+            expect(a.b).toBe(1);
+            // expect(a.c.d).toEqual(1);
+
+            // a.c = 1;
+            a.b = { d: 1 };
+
+            // expect(a.c).toBe(1);
+            expect(a.b.d).toBe(1);
+
+            fireObjectObserves(function () {
+                // expect(localStorage.getItem("A.c")).toBe('1');
+                expect(localStorage.getItem("A.b.d")).toBe('1');
+                done();
+            });
+        });
+    });
+
+    it("Should handle having a object property changed to a number", function (done) {
+        var a = Persistient.create("A");
+
+        a.c = { d: 1 };
+
+        fireObjectObserves(function () {
+            expect(a.c.d).toEqual(1);
+
+            a.c = 1;
+
+            expect(a.c).toBe(1);
+
+            fireObjectObserves(function () {
+                expect(localStorage.getItem("A.c")).toBe('1');
+                done();
+            });
+        });
+    });
+
+    it("Should handle having property type swaps occuring simultaneously", function (done) {
+
+        var a = Persistient.create("A");
+
+        a.b = 1;
+        a.c = { d: 1 };
+
+        fireObjectObserves(function () {
+            expect(a.b).toBe(1);
+            expect(a.c.d).toEqual(1);
+
+            a.c = 1;
+            a.b = { d: 1 };
+
+            expect(a.c).toBe(1);
+            expect(a.b.d).toBe(1);
+
+            fireObjectObserves(function () {
+                expect(localStorage.getItem("A.c")).toBe('1');
+                expect(localStorage.getItem("A.b.d")).toBe('1');
+                done();
+            });
+        });
+    });
 });
+
+describe("A Persistient Array", function () {});
