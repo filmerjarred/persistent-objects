@@ -44,16 +44,19 @@ function fireObjectObserves(done) {
     setTimeout(done, 0);
 }
 
+function clear(done) {
+    emulateRefresh(function () {
+        localStorage.clear(localStorage);
+        done();
+    });
+}
+
 describe('A wizard:', function () {
     var item;
     var changed;
 
-    afterEach(function (done) {
-        emulateRefresh(function () {
-            localStorage.clear(localStorage);
-            done();
-        });
-    });
+    beforeEach(clear);
+    afterEach(clear);
 
     it("Should have only two iterable properties", function () {
         var hermoine = new Wizard("Hermoine Granger");
@@ -125,12 +128,8 @@ describe('A wizard:', function () {
 });
 
 describe("A muggle:", function () {
-    afterEach(function (done) {
-        emulateRefresh(function () {
-            localStorage.clear(localStorage);
-            done();
-        });
-    });
+    beforeEach(clear);
+    afterEach(clear);
 
     it("Should save and load", function () {
         var jarred = { age: 21 };
@@ -147,12 +146,8 @@ describe("A muggle:", function () {
 });
 
 describe("A Persistient Object", function () {
-    afterEach(function (done) {
-        emulateRefresh(function () {
-            localStorage.clear(localStorage);
-            done();
-        });
-    });
+    beforeEach(clear);
+    afterEach(clear);
 
     it("Should write it's properties to the localStorage", function () {
         expect(localStorage.getItem("A.b")).toBe(null);

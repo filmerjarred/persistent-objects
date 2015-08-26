@@ -238,8 +238,6 @@ function alignChild(parent, childID, source){
     } else {
         alignChildNonObject(parent, childID, source);
     }
-
-
 }
 
 function alignChildObject(parent, childID, source){
@@ -259,8 +257,16 @@ function alignChildObject(parent, childID, source){
 
     //If anyone writes to this, it means we need to realign the property. But we need to check to see if we should adopt the value we're adding.
     parent.__defineSetter__(childID, function(value){
-        delete parent[childID];     //Will trigger a key removal
-        parent[childID] = value;    //Will trigger a key addition, and it can decide whether to adopt it there.
+        child = value;
+
+        if(value.pInfo){
+            _.pull(obj.pInfo.childIDs, childID); //If the old value was a standard child
+            parent.pInfo.adoptedCIDs[childID] = value.pInfo.cid;
+            cache.set(parent.pInfo.cid, parent.pInfo);
+        } else {
+            alignChild(parent, childID, "MODEL");
+        }
+
         return value;
     })
 
@@ -271,26 +277,24 @@ function alignChildObject(parent, childID, source){
 }
 
 function watchForChanges(obj){
-        Object.observe(obj, changes => {
-            changes.forEach(change => {
-                var childID = change.name;
-                var childCID = obj.pInfo.cid + "." + childID;
+    Object.observe(obj, changes => {
+        changes.forEach(change => {
+            var childID = change.name;
+            var childCID = obj.pInfo.cid + "." + childID;
 
-                if(!_.includes(obj.dontCache, childID)){
-                    if(change.type == "add" && (childID in obj)){
-                        alignChild(obj, childID, "MODEL");
-                    } else if (change.type == "delete"){
-                       _.pull(obj.pInfo.childIDs, childID);
-                       _.pull(obj.pInfo.adoptedIDs, childCID);
-                       cache.set(obj.pInfo.cid, obj.pInfo);
-                    }
-
-                    updateObjInfo(obj)
+            if(!_.includes(obj.dontCache, childID)){
+                if(change.type == "add" && (childID in obj)){
+                    alignChild(obj, childID, "MODEL");
+                } else if (change.type == "delete"){
+                   _.pull(obj.pInfo.childIDs, childID);
+                   _.pull(obj.pInfo.adoptedIDs, childCID);
+                   cache.set(obj.pInfo.cid, obj.pInfo);
                 }
-            })
 
-
-        }, ["add", "delete"]);
+                updateObjInfo(obj)
+            }
+        })
+    }, ["add", "delete"]);
 }
 
 function alignChildNonObject(parent, childID, source){
@@ -317,7 +321,6 @@ function alignChildNonObject(parent, childID, source){
 }
 
 function updateObjInfo(obj){
-    
 }
 
 function destroy(obj){

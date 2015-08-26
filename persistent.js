@@ -281,8 +281,16 @@ function alignChildObject(parent, childID, source) {
 
     //If anyone writes to this, it means we need to realign the property. But we need to check to see if we should adopt the value we're adding.
     parent.__defineSetter__(childID, function (value) {
-        delete parent[childID]; //Will trigger a key removal
-        parent[childID] = value; //Will trigger a key addition, and it can decide whether to adopt it there.
+        child = value;
+
+        if (value.pInfo) {
+            _.pull(obj.pInfo.childIDs, childID); //If the old value was a standard child
+            parent.pInfo.adoptedCIDs[childID] = value.pInfo.cid;
+            cache.set(parent.pInfo.cid, parent.pInfo);
+        } else {
+            alignChild(parent, childID, "MODEL");
+        }
+
         return value;
     });
 
