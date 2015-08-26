@@ -13,6 +13,33 @@ In the first lecture of my first web development course, we were told that javas
 
 # Usage
 
+### Basic Usage
+
+```javascript
+var a = new Persistient("a");
+a.b = {c:1};
+```
+
+*PAGE REFRESH*
+
+```javascript
+var a = new Persistient("a");
+console.log(a.b.c) //1, tada!
+```
+
+
+The Persistient class (and any class extended by it) has 4 static methods:
+
+Persistient.create(id), will create a new persistient object under the given id, overriding anything there previously
+
+Persistient.load(id), will load whatever was at that id. If there's nothing there, will be undefined
+
+Persistient.save(id, obj), will save the object given to the cache.
+
+Persistient.loadOrCreate(id), will load the item at the given id, or create a new one if nothing's there.
+
+Using the 'new' keyword will emulate loadOrCreate, as seen above.
+
 ### Class Syntax
 
 ```javascript
@@ -35,7 +62,7 @@ hermoine.befriend(ron);
 ron.befriend(hermoine);
 
 hermoine.friends //{"Ron Weasly":ron}
-ron.friends //{"Ron Weasly":ron}
+ron.friends //{"Hermoine Granger":hermoine}
 
 ron.petType = "Lost";
 
