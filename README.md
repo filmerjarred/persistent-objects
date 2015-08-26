@@ -11,6 +11,9 @@ In the first lecture of my first web development course, we were told that javas
     <script type = "application/javascript" src = "persistient.js"></script>
 ```
 
+# Browser Support
+Persistient objects rely on Object.observe, which is currently only available in chrome. Polyfills are being looked into.
+
 # Usage
 
 ### Basic Usage
@@ -121,5 +124,6 @@ harry.petType// "Owl"
     options.selected //5;
 ```
 
-*Coming soon*
-Array support
+### arrays
+
+Arrays should theoretically work fine, although they've not been tested.

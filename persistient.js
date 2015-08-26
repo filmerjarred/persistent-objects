@@ -1,5 +1,9 @@
 //babel --watch util.cache.js6 --out-file persistient.js
 
+/**
+ * Hack in support for Function.name for browsers that don't support it.
+ * IE, I'm looking at you.
+**/
 "use strict";
 
 var _bind = Function.prototype.bind;
@@ -8,6 +12,17 @@ var _slice = Array.prototype.slice;
 var _createClass = (function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; })();
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+if (Function.prototype.name === undefined && Object.defineProperty !== undefined) {
+    Object.defineProperty(Function.prototype, 'name', {
+        get: function get() {
+            var funcNameRegex = /function\s([^(]{1,})\(/;
+            var results = funcNameRegex.exec(this.toString());
+            return results && results.length > 1 ? results[1].trim() : "";
+        },
+        set: function set(value) {}
+    });
+}
 
 var alignInConstructor = true;
 
@@ -197,33 +212,11 @@ function align(object, pInfo, source) {
     Object.defineProperty(object, "pInfo", { value: pInfo, writeable: false });
     loadedItems[object.pInfo.cid] = object;
 
-    var _iteratorNormalCompletion = true;
-
-    //adoptedIds = {'property name on adopted parent' : 'child cid'}
-    var _didIteratorError = false;
-    var _iteratorError = undefined;
-
-    try {
-        for (var _iterator = object.pInfo.childIDs[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
-            var id = _step.value;
-
-            alignChild(object, id, source);
-        }
-    } catch (err) {
-        _didIteratorError = true;
-        _iteratorError = err;
-    } finally {
-        try {
-            if (!_iteratorNormalCompletion && _iterator["return"]) {
-                _iterator["return"]();
-            }
-        } finally {
-            if (_didIteratorError) {
-                throw _iteratorError;
-            }
-        }
+    for (var i in object.pInfo.childIDs) {
+        alignChild(object, object.pInfo.childIDs[i], source);
     }
 
+    //adoptedIds = {'property name on adopted parent' : 'child cid'}
     for (var id in object.pInfo.adoptedCIDs) {
         var child = fromCache(object.pInfo.adoptedCIDs[id]);
 

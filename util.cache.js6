@@ -1,5 +1,20 @@
 //babel --watch util.cache.js6 --out-file persistient.js
 
+/**
+ * Hack in support for Function.name for browsers that don't support it.
+ * IE, I'm looking at you.
+**/
+if (Function.prototype.name === undefined && Object.defineProperty !== undefined) {
+    Object.defineProperty(Function.prototype, 'name', {
+        get: function() {
+            var funcNameRegex = /function\s([^(]{1,})\(/;
+            var results = (funcNameRegex).exec((this).toString());
+            return (results && results.length > 1) ? results[1].trim() : "";
+        },
+        set: function(value) {}
+    });
+}
+
 var alignInConstructor = true;
 class Persistient{
     constructor(id){
@@ -173,8 +188,8 @@ function align(object, pInfo, source){
     Object.defineProperty(object, "pInfo", {value:pInfo, writeable:false});
     loadedItems[object.pInfo.cid] = object;
 
-    for(var id of object.pInfo.childIDs){
-        alignChild(object, id, source);
+    for(var i in object.pInfo.childIDs){
+        alignChild(object, object.pInfo.childIDs[i], source);
     }
 
     //adoptedIds = {'property name on adopted parent' : 'child cid'}
