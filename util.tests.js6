@@ -36,9 +36,8 @@ describe('A wizard:', function() {
         });
     })
 
-
     it("Should have only two iterable properties", function(){
-        var hermoine = new Wizard();
+        var hermoine = new Wizard("Hermoine Granger");
 
         var n = 0;
         for(var i in hermoine){
@@ -47,15 +46,15 @@ describe('A wizard:', function() {
         expect(n).toBe(2);
     })
 
-    it("Should remember their name after a refresh", function(){
+    it("Should remember their name after a refresh", function(done){
         var hermoine = Wizard.create("Hermoine Granger")
 
         expect(hermoine.name).toBe("Hermoine Granger");
 
         emulateRefresh(function(){
             var hermoine = Wizard.load("Hermoine Granger");
-
             expect(hermoine.name).toBe("Hermoine Granger");
+            done()
         });
     })
 
@@ -89,7 +88,7 @@ describe('A wizard:', function() {
     it("Should be able to noad", function(done){
         expect(Wizard.load("Harry Potter")).toBe(undefined);
 
-        var harry = new Wizard("Harry Potter");
+        var harry = Wizard.loadOrCreate("Harry Potter");
 
         expect(harry.petType).toBe(undefined);
         harry.petType = "Owl";
@@ -98,7 +97,7 @@ describe('A wizard:', function() {
             expect(Wizard.load("Harry Potter").petType).toBe("Owl");
 
             emulateRefresh(function(){
-                var harry = new Wizard("Harry Potter");
+                var harry = Wizard.loadOrCreate("Harry Potter");
                 expect(harry.petType).toBe("Owl");
                 done();
             })
@@ -192,7 +191,7 @@ describe("A Persistient Object", function(){
             delete a.b;
 
             fireObjectObserves(function(){
-                expect(localStorage.getItem("A.b")).toBe(null);
+                expect(cache.get("A").childIDs).toEqual([]);
                 done();
             })
         })
@@ -342,8 +341,26 @@ describe("A Persistient Object", function(){
         })
     })
 
-    it("Should handle adopted objects being changed", function(){
-        expect(true).toBe(false);
+    it("Should handle adopted objects being changed", function(done){
+        var a = Persistient.create("A");
+        var b = Persistient.create("B");
+        var c = Persistient.create("C");
+
+        a.b = b;
+        b.value = 1;
+        c.value = 2;
+
+        emulateRefresh(function(){
+            var a = Persistient.load("A");
+            expect(a.b.value).toBe(1);
+            a.b = c;
+
+            emulateRefresh(function(){
+                var a = Persistient.load("A");
+                expect(a.b.value).toBe(2);
+                done();
+            })
+        })
     })
 
     it("Should handle having a number property changed to an object", function(done){
@@ -351,20 +368,14 @@ describe("A Persistient Object", function(){
         var a = Persistient.create("A");
 
         a.b = 1;
-        // a.c = {d:1};
 
         fireObjectObserves(function(){
             expect(a.b).toBe(1);
-            // expect(a.c.d).toEqual(1);
-
-            // a.c = 1;
             a.b = {d:1};
 
-            // expect(a.c).toBe(1);
             expect(a.b.d).toBe(1);
 
             fireObjectObserves(function(){
-                // expect(localStorage.getItem("A.c")).toBe('1');
                 expect(localStorage.getItem("A.b.d")).toBe('1');
                 done();
             })

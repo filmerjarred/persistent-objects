@@ -100,3 +100,7 @@ return Yn})):Mn&&qn?Vn?(qn.exports=Yn)._=Yn:Mn._=Yn:Zn._=Yn}).call(this);
 _.isNumeric = function(n){
     return !isNaN(parseFloat(n)) && isFinite(n);
 }
+
+_.erase = function(array, item){
+    array = _.without(array, item);
+}
