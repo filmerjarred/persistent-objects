@@ -1,4 +1,4 @@
-//babel --watch util.cache.js6 --out-file persistient.js
+//babel --watch util.cache.js6 --out-file persistent.js
 
 /**
  * Hack in support for Function.name for browsers that don't support it.
@@ -131,7 +131,7 @@ function registerType(type){
 
 //DEFINITIONS
 //CID : The cache id, the globably unique id used as a key in the cache.
-//pObject : A persistient object, in that all it's properties that aren't other objects, listed in don't cache, or adopted point to the cache
+//pObject : A persistent object, in that all it's properties that aren't other objects, listed in don't cache, or adopted point to the cache
 //child : The value of a property of a pObject
 //childID : The index of the child of a pObject.
 //childCID : will be pObject.id + "." + child.id
