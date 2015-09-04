@@ -1,6 +1,6 @@
 # persistent-objects
 
-Warning: Halfbaked mad science.
+Warning: Mad science.
 
 In the first lecture of my first web development course, we were told that javascript had a short memory, and shouldn't be expected to stick around after page refreshes. I made a note to find a way around that when I'd had enough experience, and now that I have, I built this!
 
@@ -16,20 +16,108 @@ Persistient objects rely on Object.observe, which is currently only available in
 
 # Usage
 
-### Basic Usage
-
+## Basic Usage
+A "Persistient" object is identical to a plain old javascript object, except the values of it's properties survive page refresh.
 ```javascript
 var a = new Persistient("a");
-a.b = {c:1};
+a.b = 1;
 ```
 
 *PAGE REFRESH*
 
 ```javascript
 var a = new Persistient("a");
-console.log(a.b.c) //1, tada!
+console.log(a.b) //1, tada!
 ```
 
+But wait, there's more!
+
+```javascript
+var a = new Persistient("a");
+var b = new Persistient("b")
+a.b = b;
+```
+
+*PAGE REFRESH*
+
+```javascript
+var a = new Persistient("a");
+var b = new Persistient("b")
+a.b === b; //true
+```
+
+All objects are linked by reference, rather than by value. "Awesome! But what if I want to use my own classes?" I hear you say. Easy mode!
+
+###es6 classes
+```javascript
+class Wizard extends Persistient{   //Just extend your class with Persistient
+    constructor(name){
+        //Remember to call the parent constructuctor with the id of the object
+        super(name);
+
+        this.name = name;
+        this.friends = {};
+        this.spells = []; //works just as well with arrays!
+    }
+
+    learn(spell){
+        this.spells.push(spell);
+    }
+
+    befriend(friend){
+        this.friends[friend.name] = friend;
+    }
+}
+```
+
+###es5 classes
+
+```javascript
+
+function Wizard (name){
+    this.name = name;
+    this.friends = {};
+    this.spells = []; //works just as well with arrays!
+
+    this.learn = function(spell){
+        this.spells.push(spell);
+    }
+
+    this.befriend = function(friend){
+        this.friends[friend.name] = friend;
+    }
+
+    Persistient.save(name, this);
+}
+```
+
+Once your classes are established, you can use them in the normal way.
+
+```javascript
+var hermoine = new Wizard("Hermoine Granger");
+var ron = new Wizard("Ron Weasly");
+
+hermoine.befriend(ron);
+ron.befriend(hermoine);
+
+hermoine.learn("Wingardium Leviosa");
+ron.learn("Wingardium Leviosaah");
+```
+
+*PAGE REFRESH*
+
+```javascript
+var hermoine = new Wizard("Hermoine Granger");
+var ron = new Wizard("Ron Weasly");
+
+hermoine.friends["Ron Weasly"] === ron; //true
+ron.friends["Hermoine Granger"] === hermoine; //true
+
+ron.friends["Hermoine Granger"].spells // ["Wingardium Leviosa"]
+hermoine.friends["Ron Weasly"].spells // ["Wingardium Leviosaah"]
+```
+
+## Advanced Usage
 
 The Persistient class (and any class extended by it) has 4 static methods:
 
@@ -43,30 +131,15 @@ Persistient.loadOrCreate(id), will load the item at the given id, or create a ne
 
 Using the 'new' keyword will emulate loadOrCreate, as seen above.
 
-### Class Syntax
+NOTE: These statis class methods are not yet available when just using es5 syntax.
+
+### Examples
 
 ```javascript
-class Wizard extends Persistient{
-    constructor(name){
-        super(name);
-        this.name = name;
-        this.friends = {};
-    }
-
-    befriend(friend){
-        this.friends[friend.name] = friend;
-    }
-}
-
 var hermoine = Wizard.create("Hermoine Granger");
 var ron = Wizard.create("Ron Weasly");
 
-hermoine.befriend(ron);
-ron.befriend(hermoine);
-
-hermoine.friends //{"Ron Weasly":ron}
-ron.friends //{"Hermoine Granger":hermoine}
-
+hermoine.petType = "Cat";
 ron.petType = "Lost";
 
 //If you load non existient object, will be undefined
@@ -81,24 +154,19 @@ harry.petType = "Owl"
 
 ```javascript
 
+//As we've used the create function, whatever was under "Ron Weasly", is erased
+var ron = Wizard.create("Ron Weasly");
 var hermoine = Wizard.load("Hermoine Granger");
-var ron = Wizard.load("Ron Weasly");
 
-hermoine.friends //{"Ron Weasly":ron}
-ron.friends //{"Hermoine Granger":hermoine}
-
-hermoine.friends["Ron Weasly"] === ron; //true
-
-ron.petType //Lost
-hermoine.friends["Ron Weasly"].petType = "Frog";
-ron.petType //Frog
+ron.petType //undefined
+hermoine.petType //Cat
 
 //Because harry already exists, will load the one stored, rather than overwrite, like Wizard.create would.
 var harry = new Wizard("Harry Potter"); //<Wizard>
 harry.petType// "Owl"
 ```
 
-### pojo Syntax
+If you just want to store a simple data object, then .save might be what you want.
 
 ```javascript
     var options = {selected:4, menu:false, dropdownActive:false};
@@ -123,7 +191,3 @@ harry.petType// "Owl"
     var options = new Persistient("options"); //seeing as there's alread one there, we load that rather than create a new one.
     options.selected //5;
 ```
-
-### arrays
-
-Arrays should theoretically work fine, although they've not been tested.

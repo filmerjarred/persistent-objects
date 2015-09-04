@@ -177,7 +177,7 @@ function fromModel(cid, object){
         id:_.last(cid.split(".")),
         type:object.constructor.name.toLowerCase(),
         disownedIDs:disownedIDs,
-        childIDs:_.difference(Object.keys(object), disownedIDs),
+        childIDs:_.difference(Object.keys(object), disownedIDs.concat(Object.keys(adoptedCIDs))),   //The child ids will be all the keys of the object that don't include anything we don't want to cache, and ids we've adopted
         adoptedCIDs:adoptedCIDs
     };
 
@@ -194,18 +194,21 @@ function align(object, pInfo, source){
 
     //adoptedIds = {'property name on adopted parent' : 'child cid'}
     for(var id in object.pInfo.adoptedCIDs){
-        var child = fromCache(object.pInfo.adoptedCIDs[id]);
+        (function(id){
+            var child = fromCache(object.pInfo.adoptedCIDs[id]);
 
-        object.__defineSetter__(id, function(value){
-            delete object[id];     //Will trigger a key removal
-            object[id] = value;    //Will trigger a key addition, and it can decide whether to adopt it there.
-            return value;
-        })
+            object.__defineSetter__(id, function(value){
+                delete object[id];     //Will trigger a key removal
+                delete object.pInfo.adoptedCIDs[id]; //If we're writing a flat value to where an adopted object used to be, clear out the key from adopted
+                object[id] = value;    //Will trigger a key addition, and it can decide whether to adopt it there.
+                return value;
+            })
 
-        //If we define a setter, we need to define a getter.
-        object.__defineGetter__(id, function(){
-            return child;
-        })
+            //If we define a setter, we need to define a getter.
+            object.__defineGetter__(id, function(){
+                return child;
+            })
+        })(id)
     }
 
     cache.set(object.pInfo.cid, object.pInfo);
@@ -246,6 +249,7 @@ function alignChildObject(parent, childID, source){
     //if the child already has a pInfo, then just adopt it.
     if(parent[childID] && parent[childID].pInfo){
         parent.pInfo.adoptedCIDs[childID] = parent[childID].pInfo.cid;
+        var child = parent[childID];
         cache.set(parent.pInfo.cid, parent.pInfo);
     } else if(source === "MODEL"){
         var child = fromModel(childCID, parent[childID]);
@@ -259,8 +263,9 @@ function alignChildObject(parent, childID, source){
     parent.__defineSetter__(childID, function(value){
         child = value;
 
-        if(value.pInfo){
-            _.pull(obj.pInfo.childIDs, childID); //If the old value was a standard child
+        //WE'RE ADOPTING OUT CHILDREN THAT ARE OBJECTS
+        if(value.pInfo ){
+            _.pull(parent.pInfo.childIDs, childID); //If the old value was a standard child
             parent.pInfo.adoptedCIDs[childID] = value.pInfo.cid;
             cache.set(parent.pInfo.cid, parent.pInfo);
         } else {
@@ -274,27 +279,6 @@ function alignChildObject(parent, childID, source){
     parent.__defineGetter__(childID, function(){
         return child;
     })
-}
-
-function watchForChanges(obj){
-    Object.observe(obj, changes => {
-        changes.forEach(change => {
-            var childID = change.name;
-            var childCID = obj.pInfo.cid + "." + childID;
-
-            if(!_.includes(obj.dontCache, childID)){
-                if(change.type == "add" && (childID in obj)){
-                    alignChild(obj, childID, "MODEL");
-                } else if (change.type == "delete"){
-                   _.pull(obj.pInfo.childIDs, childID);
-                   _.pull(obj.pInfo.adoptedIDs, childCID);
-                   cache.set(obj.pInfo.cid, obj.pInfo);
-                }
-
-                updateObjInfo(obj)
-            }
-        })
-    }, ["add", "delete"]);
 }
 
 function alignChildNonObject(parent, childID, source){
@@ -318,6 +302,29 @@ function alignChildNonObject(parent, childID, source){
         }
         return value;
     })
+}
+
+
+function watchForChanges(obj){
+    Object.observe(obj, changes => {
+        changes.forEach(change => {
+            var childID = change.name;
+            var childCID = obj.pInfo.cid + "." + childID;
+
+            if(!_.includes(obj.dontCache, childID)){
+                if(change.type == "add" && (childID in obj)){
+                    alignChild(obj, childID, "MODEL");
+                } else if (change.type == "delete"){
+                   _.pull(obj.pInfo.childIDs, childID);
+                   _.pull(obj.pInfo.adoptedIDs, childCID);
+                   cache.set(obj.pInfo.cid, obj.pInfo);
+                   cache.clear(childCID);
+                }
+
+                updateObjInfo(obj)
+            }
+        })
+    }, ["add", "delete"]);
 }
 
 function updateObjInfo(obj){

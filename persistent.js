@@ -14,7 +14,7 @@ var _createClass = (function () { function defineProperties(target, props) { for
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
 if (Function.prototype.name === undefined && Object.defineProperty !== undefined) {
-    Object.defineProperty(Function.prototype, 'name', {
+    Object.defineProperty(Function.prototype, "name", {
         get: function get() {
             var funcNameRegex = /function\s([^(]{1,})\(/;
             var results = funcNameRegex.exec(this.toString());
@@ -38,19 +38,19 @@ var Persistient = (function () {
         }
     }
 
-    //Will load id if it exists, else will create it.
-    //Must start alignment after super call, but before object is returned.
-
     _createClass(Persistient, null, [{
         key: "loadOrCreate",
+
+        //Will load id if it exists, else will create it.
+        //Must start alignment after super call, but before object is returned.
         value: function loadOrCreate(id) {
             return this.load(id) || this.create(id);
         }
+    }, {
+        key: "create",
 
         //Will destroy the object previously living at the given id if there was one. Then create one.
         //Must start alignment after super call, but before object is returned.
-    }, {
-        key: "create",
         value: function create(id) {
             var exists = cache.get(id);
 
@@ -77,11 +77,9 @@ var Persistient = (function () {
     }]);
 
     return Persistient;
-})()
+})();
 
 //Functions for accessing local system cache.
-;
-
 var cache = {
     //Takes a value and set's it in the local cache. Will break if objects have circular references.
     set: function set(key, value) {
@@ -201,7 +199,7 @@ function fromModel(cid, object) {
         id: _.last(cid.split(".")),
         type: object.constructor.name.toLowerCase(),
         disownedIDs: disownedIDs,
-        childIDs: _.difference(Object.keys(object), disownedIDs),
+        childIDs: _.difference(Object.keys(object), disownedIDs.concat(Object.keys(adoptedCIDs))), //The child ids will be all the keys of the object that don't include anything we don't want to cache, and ids we've adopted
         adoptedCIDs: adoptedCIDs
     };
 
@@ -218,18 +216,21 @@ function align(object, pInfo, source) {
 
     //adoptedIds = {'property name on adopted parent' : 'child cid'}
     for (var id in object.pInfo.adoptedCIDs) {
-        var child = fromCache(object.pInfo.adoptedCIDs[id]);
+        (function (id) {
+            var child = fromCache(object.pInfo.adoptedCIDs[id]);
 
-        object.__defineSetter__(id, function (value) {
-            delete object[id]; //Will trigger a key removal
-            object[id] = value; //Will trigger a key addition, and it can decide whether to adopt it there.
-            return value;
-        });
+            object.__defineSetter__(id, function (value) {
+                delete object[id]; //Will trigger a key removal
+                delete object.pInfo.adoptedCIDs[id]; //If we're writing a flat value to where an adopted object used to be, clear out the key from adopted
+                object[id] = value; //Will trigger a key addition, and it can decide whether to adopt it there.
+                return value;
+            });
 
-        //If we define a setter, we need to define a getter.
-        object.__defineGetter__(id, function () {
-            return child;
-        });
+            //If we define a setter, we need to define a getter.
+            object.__defineGetter__(id, function () {
+                return child;
+            });
+        })(id);
     }
 
     cache.set(object.pInfo.cid, object.pInfo);
@@ -252,10 +253,10 @@ function alignChild(parent, childID, source) {
     if (source === "MODEL") {
         var childIsObject = _.isObject(parent[childID]); //If the current value of the property is an parentect
     } else if (source === "CACHE") {
-            var childIsObject = _.isObject(cache.get(parent.pInfo.cid + "." + childID)); //If there's an parentect at the child's cid
-        } else {
-                throw new Error("Invalid source!");
-            }
+        var childIsObject = _.isObject(cache.get(parent.pInfo.cid + "." + childID)); //If there's an parentect at the child's cid
+    } else {
+        throw new Error("Invalid source!");
+    }
 
     if (childIsObject) {
         alignChildObject(parent, childID, source);
@@ -270,6 +271,7 @@ function alignChildObject(parent, childID, source) {
     //if the child already has a pInfo, then just adopt it.
     if (parent[childID] && parent[childID].pInfo) {
         parent.pInfo.adoptedCIDs[childID] = parent[childID].pInfo.cid;
+        var child = parent[childID];
         cache.set(parent.pInfo.cid, parent.pInfo);
     } else if (source === "MODEL") {
         var child = fromModel(childCID, parent[childID]);
@@ -283,8 +285,9 @@ function alignChildObject(parent, childID, source) {
     parent.__defineSetter__(childID, function (value) {
         child = value;
 
+        //WE'RE ADOPTING OUT CHILDREN THAT ARE OBJECTS
         if (value.pInfo) {
-            _.pull(obj.pInfo.childIDs, childID); //If the old value was a standard child
+            _.pull(parent.pInfo.childIDs, childID); //If the old value was a standard child
             parent.pInfo.adoptedCIDs[childID] = value.pInfo.cid;
             cache.set(parent.pInfo.cid, parent.pInfo);
         } else {
@@ -298,27 +301,6 @@ function alignChildObject(parent, childID, source) {
     parent.__defineGetter__(childID, function () {
         return child;
     });
-}
-
-function watchForChanges(obj) {
-    Object.observe(obj, function (changes) {
-        changes.forEach(function (change) {
-            var childID = change.name;
-            var childCID = obj.pInfo.cid + "." + childID;
-
-            if (!_.includes(obj.dontCache, childID)) {
-                if (change.type == "add" && childID in obj) {
-                    alignChild(obj, childID, "MODEL");
-                } else if (change.type == "delete") {
-                    _.pull(obj.pInfo.childIDs, childID);
-                    _.pull(obj.pInfo.adoptedIDs, childCID);
-                    cache.set(obj.pInfo.cid, obj.pInfo);
-                }
-
-                updateObjInfo(obj);
-            }
-        });
-    }, ["add", "delete"]);
 }
 
 function alignChildNonObject(parent, childID, source) {
@@ -342,6 +324,28 @@ function alignChildNonObject(parent, childID, source) {
         }
         return value;
     });
+}
+
+function watchForChanges(obj) {
+    Object.observe(obj, function (changes) {
+        changes.forEach(function (change) {
+            var childID = change.name;
+            var childCID = obj.pInfo.cid + "." + childID;
+
+            if (!_.includes(obj.dontCache, childID)) {
+                if (change.type == "add" && childID in obj) {
+                    alignChild(obj, childID, "MODEL");
+                } else if (change.type == "delete") {
+                    _.pull(obj.pInfo.childIDs, childID);
+                    _.pull(obj.pInfo.adoptedIDs, childCID);
+                    cache.set(obj.pInfo.cid, obj.pInfo);
+                    cache.clear(childCID);
+                }
+
+                updateObjInfo(obj);
+            }
+        });
+    }, ["add", "delete"]);
 }
 
 function updateObjInfo(obj) {}
