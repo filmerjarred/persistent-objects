@@ -1,0 +1,19 @@
+{
+  "name": "asdf",
+  "private": true,
+  "version": "0.0.0",
+  "description": "A Sails application!",
+  "keywords": [],
+  "dependencies": {
+    "gulp": "*",
+    "gulp-babel": "*",
+    "gulp-rename": "*",
+    "gulp-lodash-builder": "*"
+  },
+  "scripts": {
+    "start": "node app.js",
+    "debug": "node debug app.js"
+  },
+  "author": "anonymous node/sails user",
+  "license": ""
+}
