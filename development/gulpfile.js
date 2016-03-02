@@ -6,8 +6,8 @@ var uglify = require("gulp-uglify");
 
 
 gulp.task('default', function(){
-    // gulp.watch('./babel.*.js', ['build'], {debounce: 2000});
-    gulp.watch('./babel.*.js', ['babel'], {debounce: 2000});
+    gulp.watch('./babel.*.js', ['build'], {debounce: 2000});
+    // gulp.watch('./babel.*.js', ['babel'], {debounce: 2000});
 });
 
 gulp.task('babel', function() {

@@ -30,11 +30,6 @@ if (Function.prototype.name === undefined && Object.defineProperty !== undefined
 
 var cacheID = 1;
 
-//ok, so we got a problem with the system.
-//
-//when we go to load pObject say, we load everything under it, which includes the other classes
-//and those classes try to load their sun objects, before the class is registered
-
 //Functions for accessing local system cache.
 var cache = {
     //Takes a value and set's it in the local cache. Will break if objects have circular references.
@@ -106,6 +101,7 @@ var types = {
 
 var entityManagers = {};
 
+//Wrapper on top of the auto caching system for turning entity classes into entity managers
 function registerType(type) {
     //We need to wrap the class to allow the use of 'new' syntax.
     function persistientWrapper() {
@@ -227,6 +223,7 @@ var Pobject = function Pobject() {
 
 registerType(Pobject);
 
+// Loads all data from cache into entity managers
 function initialiseData() {
     var em = _.values(entityManagers);
 
@@ -314,6 +311,8 @@ function fromModel(object, id) {
     return align(object, pInfo, "MODEL");
 }
 
+// Aligns an object with what's in the cache
+// Uses the source property as the source of truth.
 function align(object, pInfo, source) {
     Object.defineProperty(object, "pInfo", { value: pInfo, writeable: false });
     loadedItems[object.pInfo.id] = object;
@@ -333,6 +332,7 @@ function align(object, pInfo, source) {
     return object;
 }
 
+// Anyone getting the property get's it from the cache, and anyone writing the property sets in cache
 function alignChild(parent, childName, source) {
     var cacheKey = parent.pInfo.id + "." + childName;
 
@@ -358,14 +358,16 @@ function alignChild(parent, childName, source) {
 
 function alignSibling(parent, siblingName, source) {
     if (source === "MODEL") {
+        // If we're aligning the cache with the model, check if the sibling is a pObject. If is get it from the cache, else use model
         var sibling = parent[siblingName].pInfo ? parent[siblingName] : fromModel(parent[siblingName], parent.pInfo.siblingIDs[siblingName]);
     } else if (source === "CACHE") {
+        // Get sibling object from cache
         var sibling = fromCache(parent.pInfo.siblingIDs[siblingName]);
     } else {
         throw new Error("Invalid source!");
     }
 
-    //If we define a setter, we need to define a getter.
+    //If we define a setter, we need to define a getter, even if it does nothing special.
     parent.__defineGetter__(siblingName, function () {
         return sibling;
     });
@@ -378,9 +380,12 @@ function alignSibling(parent, siblingName, source) {
     });
 }
 
+// We can cache replace properties we know about. But if new properties are added to the object (or more likley, array) we're in trouble
 function watchForChanges(obj) {
     Object.observe(obj, function (changes) {
         changes.forEach(function (change) {
+
+            //Check we're disallowed the change
             if (!_.includes(obj.pInfo.disownedIDs, change.name)) {
 
                 if (change.type == "add" && change.name in obj && !_.isFunction(obj[change.name])) {
@@ -403,25 +408,3 @@ function watchForChanges(obj) {
         });
     }, ["add", "delete"]);
 }
-
-//Should be run on all childIDs. Assume source is cache.
-// function alignChild(parent, childID, source){
-//     if(!_.includes(parent.pInfo.childIDs, childID)){
-//         parent.pInfo.childIDs.push(childID);
-//         cache.set(parent.pInfo.cid, parent.pInfo);
-//     }
-
-//     if(source === "MODEL"){
-//         var childIsObject = _.isObject(parent[childID]);   //If the current value of the property is an parentect
-//     } else if (source === "CACHE"){
-//         var childIsObject = _.isObject(cache.get(parent.pInfo.cid + "." + childID)); //If there's an parentect at the child's cid
-//     } else {
-//         throw new Error("Invalid source!");
-//     }
-
-//     if(childIsObject){
-//         alignChildObject(parent, childID, source);
-//     } else {
-//         alignChildNonObject(parent, childID, source);
-//     }
-// }
