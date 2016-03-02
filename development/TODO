@@ -1,0 +1,12 @@
+ ☐ Fix objects not being able to have recursive properties
+ ✔ Fix objects having boolean properties change to strings @done (15-12-29 22:30)
+
+＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿
+Archive:
+ ✔ Write blackbox function unit tests @done (15-09-10 12:22)
+ ✔ Items @done (15-09-10 12:23)
+ ✔ Think about altering the class on the global scope @done (15-09-10 12:23)
+ ✔ Straigten out the program flow @done (15-09-07 14:31)
+ ✔ Make transition from adoption to sibling @done (15-09-07 14:31)
+ ✔ Make transition from CID to ID. @done (15-09-07 14:31)
+ ✔ Do we adopted objects? @done (15-09-07 11:21)
