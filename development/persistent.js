@@ -181,7 +181,6 @@ function registerType(type) {
 
         if (_.isObject(item)) {
             persistientWrapper.remove(item);
-
             _.values(item).filter(function (obj) {
                 return _.isObject(obj) && obj.pInfo && obj !== item;
             }).forEach(persistientWrapper.obliterate);
@@ -191,6 +190,8 @@ function registerType(type) {
     };
 
     types[type.name] = type;
+    persistientWrapper.items = fromCache(type.name) || fromModel([], type.name); //create a persistient object to keep track of the persistient objects for this class.
+    persistientWrapper[pluralize(type.name.toLowerCase())] = persistientWrapper.items; //just a pluralised version of the list.
 
     if (window[type.name] !== type) {
         console.warn("Given type, " + type.name + " isn't on the global scope. Be sure to use the return value");
@@ -215,13 +216,13 @@ var Parray = (function (_Array) {
     return Parray;
 })(Array);
 
-registerType(Parray);
-
 var Pobject = function Pobject() {
     _classCallCheck(this, Pobject);
 };
 
 registerType(Pobject);
+
+registerType(Parray);
 
 // Loads all data from cache into entity managers
 function initialiseData() {
@@ -262,15 +263,6 @@ function fromCache(id) {
     }
 
     var shell = pInfo.type ? new types[pInfo.type]() : {};
-
-    // //These are 100% of the keys the object should have. Constructor may have added more.
-    // var allKeys = pInfo.childIDs.concat(pInfo.disownedIDs.concat(Object.keys(pInfo.siblingIDs)));
-
-    // //Iterate through a list of every key that shouldn't be there
-    // _.difference(Object.keys(shell), allKeys).forEach(key => {
-    //     console.warn("Culling property", key);
-    //     delete shell[key];
-    // })
 
     var obj = align(shell, pInfo, "CACHE");
     obj.onLoad && obj.onLoad();
@@ -361,7 +353,6 @@ function alignSibling(parent, siblingName, source) {
         // If we're aligning the cache with the model, check if the sibling is a pObject. If is get it from the cache, else use model
         var sibling = parent[siblingName].pInfo ? parent[siblingName] : fromModel(parent[siblingName], parent.pInfo.siblingIDs[siblingName]);
     } else if (source === "CACHE") {
-        // Get sibling object from cache
         var sibling = fromCache(parent.pInfo.siblingIDs[siblingName]);
     } else {
         throw new Error("Invalid source!");
@@ -384,10 +375,8 @@ function alignSibling(parent, siblingName, source) {
 function watchForChanges(obj) {
     Object.observe(obj, function (changes) {
         changes.forEach(function (change) {
-
             //Check we're disallowed the change
             if (!_.includes(obj.pInfo.disownedIDs, change.name)) {
-
                 if (change.type == "add" && change.name in obj && !_.isFunction(obj[change.name])) {
                     if (_.isObject(obj[change.name])) {
                         alignSibling(obj, change.name, "MODEL");

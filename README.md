@@ -184,4 +184,8 @@ var ron = Wizard.findOne({name:"Ron Weasly"});            //undefined
 ```
 
 #Developing
+<<<<<<< HEAD
 If you want to muck around with the library, 
+=======
+If you want to muck around with the library, all the raw files are in the development folder.
+>>>>>>> origin/master
