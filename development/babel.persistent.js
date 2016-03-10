@@ -177,7 +177,7 @@ function registerType(type){
     }
 
     types[type.name] = type;
-    persistientWrapper.items = fromCache(type.name) || fromModel([], type.name);    //create a persistient object to keep track of the persistient objects for this class.
+    // persistientWrapper.items = fromCache(type.name) || fromModel([], type.name);    //create a persistient object to keep track of the persistient objects for this class.
     persistientWrapper[pluralize(type.name.toLowerCase())] = persistientWrapper.items; //just a pluralised version of the list.
 
     if(window[type.name] !== type){
@@ -283,7 +283,9 @@ function fromModel(object, id){
 // Uses the source property as the source of truth. 
 function align(object, pInfo, source){
     Object.defineProperty(object, "pInfo", {value:pInfo, writeable:false});
-    loadedItems[object.pInfo.id] = object;
+
+    var p = proxyForChanges(object);
+    loadedItems[object.pInfo.id] = p;
 
     for(var i in object.pInfo.childIDs){
         alignChild(object, object.pInfo.childIDs[i], source);
@@ -294,10 +296,8 @@ function align(object, pInfo, source){
     }
 
     cache.set(object.pInfo.id, object.pInfo);
-
-    watchForChanges(object);
-
-    return object;
+    
+    return p;
 }
 
 // Anyone getting the property get's it from the cache, and anyone writing the property sets in cache
@@ -334,6 +334,8 @@ function alignSibling(parent, siblingName, source){
         throw new Error("Invalid source!");
     }
 
+    parent[siblingName] = sibling;
+
     //If we define a setter, we need to define a getter, even if it does nothing special.
     parent.__defineGetter__(siblingName, function(){
         return sibling;
@@ -345,31 +347,100 @@ function alignSibling(parent, siblingName, source){
         parent[siblingName] = value;    //Will trigger a key addition, and it can decide whether to adopt it there.
         return value;
     })
+
+    return sibling;
+}
+
+// Proxy get and set on object to catch new properties
+function proxyForChanges(obj){
+
+    var p;
+
+
+    // Get current list of properties
+
+    // See if property being set isn't in those
+
+    // if not add property as cached
+    var handler = {
+        set: function(target, property, value, receiver){
+            console.log("Being set!");
+
+            var keys = _.keys(obj);
+            obj[property] = value;
+
+            // If key is disowned, we want nothing to do with it
+            if(!_.includes(obj.pInfo.disownedIDs, property)){
+
+                //If it's not a function and it's not already on the object, cache it!
+                if(!_.isFunction(obj[property]) && !_.includes(keys, property)){
+
+                    if(_.isObject(obj[property])){
+                        alignSibling(obj, property, "MODEL");
+                        obj.pInfo.siblingIDs[property] = obj[property].pInfo.id;
+                    } else {
+                        alignChild(obj, property, "MODEL");
+                        obj.pInfo.childIDs.push(property)
+                    }
+
+                    cache.set(obj.pInfo.id, obj.pInfo);
+                } 
+            }
+
+
+            return value;
+        },
+
+        get:function(target, property){
+            return target[property];
+        },
+
+        deleteProperty(target, name){
+            _.pull(obj.pInfo.childIDs, name);
+            cache.clear(obj.pInfo.id + "." + name);
+
+
+            if(_.isArray(target)){
+                target.splice(parseInt(name), 1);
+                cache.set(obj.pInfo.id, obj.pInfo);
+                
+                return true;
+            } else {
+                delete obj[name];
+                cache.set(obj.pInfo.id, obj.pInfo);
+                return true;
+            }
+        }
+    }
+
+    p = new Proxy(obj, handler);
+
+    return p;
 }
 
 // We can cache replace properties we know about. But if new properties are added to the object (or more likley, array) we're in trouble
 function watchForChanges(obj){
-    Object.observe(obj, (changes) => {
-        changes.forEach((change) => {
-            //Check we're disallowed the change
-            if(!_.includes(obj.pInfo.disownedIDs, change.name)){
-                if(change.type == "add" && (change.name in obj)  && !_.isFunction(obj[change.name])){
-                    if(_.isObject(obj[change.name])){
-                        alignSibling(obj, change.name, "MODEL");
-                        obj.pInfo.siblingIDs[change.name] = obj[change.name].pInfo.id;
-                    } else {
-                        alignChild(obj, change.name, "MODEL");
-                        obj.pInfo.childIDs.push(change.name)
-                    }
-                } else if (change.type == "delete"){
-                    //pulls the key from the list of child keys and clears the cache property. If the child was
-                    //an object tho, will rely on destroy to remove it from the cache.
-                   _.pull(obj.pInfo.childIDs, change.name);
-                   cache.clear(obj.pInfo.id + "." + change.name);
-                }
+    // Object.observe(obj, (changes) => {
+    //     changes.forEach((change) => {
+    //         //Check we're disallowed the change
+    //         if(!_.includes(obj.pInfo.disownedIDs, change.name)){
+    //             if(change.type == "add" && (change.name in obj)  && !_.isFunction(obj[change.name])){
+    //                 if(_.isObject(obj[change.name])){
+    //                     alignSibling(obj, change.name, "MODEL");
+    //                     obj.pInfo.siblingIDs[change.name] = obj[change.name].pInfo.id;
+    //                 } else {
+    //                     alignChild(obj, change.name, "MODEL");
+    //                     obj.pInfo.childIDs.push(change.name)
+    //                 }
+    //             } else if (change.type == "delete"){
+    //                 //pulls the key from the list of child keys and clears the cache property. If the child was
+    //                 //an object tho, will rely on destroy to remove it from the cache.
+    //                _.pull(obj.pInfo.childIDs, change.name);
+    //                cache.clear(obj.pInfo.id + "." + change.name);
+    //             }
 
-                cache.set(obj.pInfo.id, obj.pInfo);
-            }
-        })
-    }, ["add", "delete"]);
+    //             cache.set(obj.pInfo.id, obj.pInfo);
+    //         }
+    //     })
+    // }, ["add", "delete"]);
 }
