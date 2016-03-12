@@ -20,49 +20,52 @@ jasmine.DEFAULT_TIMEOUT_INTERVAL = 1000;
 var Wizard;
 
 function registerObjects(){
-    Wizard = registerType((function(){
-        return class Wizard{
-            constructor(name, petType){
-                this.name = name;
-                this.petType = petType || "Lost"
-                this.friends = {};
-                this.spells = []; //works just as well with arrays!
-                this.recursiveProperty = this;
-            }
+    // Wizard = registerType((function(){
+    //     return class Wizard{
+    //         constructor(name, petType){
+    //             this.name = name;
+    //             this.petType = petType || "Lost"
+    //             this.friends = {};
+    //             this.spells = []; //works just as well with arrays!
+    //             this.recursiveProperty = this;
+    //         }
+	//
+    //         learn(spell){
+    //             this.spells.push(spell);
+    //         }
+	//
+    //         befriend(friend){
+    //             this.friends[friend.name] = friend;
+    //         }
+    //     }
+    // })())
+	//
+    // Parray = registerType((function(){
+    //     return class Parray extends Array {
+    //     }
+    // })())
+	//
+    // Pobject = registerType((function(){
+    //     return class Pobject{
+    //     }
+    // })())
 
-            learn(spell){
-                this.spells.push(spell);
-            }
+	A = model.registerType((function(){
+	    return class A extends model.Persistent{
+			constructor(){
+				super();
+			}
+	    }
+	})())
 
-            befriend(friend){
-                this.friends[friend.name] = friend;
-            }
-        }
-    })())
-
-    Parray = registerType((function(){
-        return class Parray extends Array {
-        }
-    })())
-
-    Pobject = registerType((function(){
-        return class Pobject{
-        }
-    })())
-
-    initialiseData();
+    model.load();
 }
 
 function emulateRefresh(done){
     fireObjectObserves(function(){
-        loadedItems = {};
 
-        types = {
-            "Object":Object,
-            "Array":Array
-        }
-
-        entityManagers = {}
+        model.data = {};
+        types = {};
 
         registerObjects();
         done();
@@ -74,6 +77,7 @@ function fireObjectObserves(done){
 }
 
 function clearCache(done){
+	localStorage.clear();
     emulateRefresh(function(){
         localStorage.clear();
         done();
@@ -81,7 +85,7 @@ function clearCache(done){
 }
 
 //========Feature tests==============
-describe('A Pobject as represented in the readme:', function() {
+describe('A persistent object as represented in the readme:', function() {
     var item;
     var changed;
 
@@ -89,25 +93,27 @@ describe('A Pobject as represented in the readme:', function() {
     afterEach(clearCache)
 
     it("Should find it's properties where it left them", function(done){
-        var a = Pobject.create("a");
+        var a = new A();
         a.b = 1;
 
         emulateRefresh(function(){
-            var a = Pobject.findOrCreate("a");
+        	a = model.data[a.metaData.id];
             expect(a.b).toBe(1);
             done();
         })
     })
 
     it("Should link it's objects by reference", function(done){
-        var a = Pobject.findOrCreate("a");
-        var b = Pobject.findOrCreate("b");
+        var a = new A();
+        var b = new A();
         a.b = b;
         b.c = 1;
 
+		var bid = b.metaData.id;
+
         emulateRefresh(function(){
-            var a = Pobject.findOrCreate("a");
-            var b = Pobject.findOrCreate("b");
+        	a = model.data[a.metaData.id];
+            b = model.data[b.metaData.id];
 
             expect(a.b).toBe(b);
             expect(a.b.c).toBe(1);
@@ -116,294 +122,294 @@ describe('A Pobject as represented in the readme:', function() {
     })
 })
 
-
-describe('A wizard', function() {
-    var item;
-    var changed;
-
-    beforeEach(function(done){
-        clearCache(function(){
-            registerObjects();
-            done();
-        });
-    })
-
-    afterEach(function(done){
-        clearCache(function(){
-            registerObjects();
-            done();
-        });
-    })
-
-    it("Should have only two iterable properties", function(){
-        var hermoine = Wizard.findOrCreate("Hermoine Granger");
-
-        var n = 0;
-        for(var i in hermoine){
-            n++;
-        }
-        expect(n).toBe(5);
-    })
-
-    it("Should remember their pet type after a refresh", function(done){
-        var hermoine = Wizard.create("Hermoine Granger")
-
-        hermoine.petType = "Cat";
-        expect(hermoine.petType).toBe("Cat");
-
-        emulateRefresh(function(){
-            var hermoine = Wizard.find("Hermoine Granger");
-            expect(hermoine.petType).toBe("Cat");
-            done()
-        });
-    })
-
-    it("Should be able to make and remember friends", function(done){
-        var hermoine = new Wizard("Hermoine Granger");
-        var ron = new Wizard("Ron Weasly");
-
-        ron.petType = "Lost";
-        expect(ron.petType).toBe("Lost");
-
-        hermoine.befriend(ron);
-        ron.befriend(hermoine);
-
-        hermoine.friends["Ron Weasly"].petType = "Frog"
-        expect(ron.petType).toBe("Frog");
-
-        expect(hermoine.friends["Ron Weasly"]).toBe(ron);
-        expect(ron.friends["Hermoine Granger"]).toBe(hermoine);
-
-        emulateRefresh(function(){
-            var hermoine = Wizard.findOne({name:"Hermoine Granger"});
-            var ron = Wizard.findOne({name:"Ron Weasly"});
-
-            expect(hermoine.friends["Ron Weasly"]).toBe(ron);
-            expect(ron.friends["Hermoine Granger"]).toBe(hermoine);
-            expect(hermoine.friends["Ron Weasly"].petType).toBe("Frog");
-            done();
-        });
-    })
-
-    it("Should be able to learn spells", function(done){
-        var hermoine = new Wizard("Hermoine Granger");
-
-        hermoine.learn("Expeco Petronum")
-        hermoine.learn("Wingardium Leviosah");
-        expect(hermoine.spells.length).toBe(2);
-        expect(hermoine.spells[0]).toBe("Expeco Petronum");
-        expect(hermoine.spells[1]).toBe("Wingardium Leviosah");
-
-        emulateRefresh(function(){
-            var hermoine = Wizard.findOne({name:"Hermoine Granger"});
-
-            expect(hermoine.spells.length).toBe(2);
-            expect(hermoine.spells[0]).toBe("Expeco Petronum");
-            expect(hermoine.spells[1]).toBe("Wingardium Leviosah");
-
-            hermoine.learn("Stupify");
-
-            expect(hermoine.spells.length).toBe(3);
-            expect(hermoine.spells[2]).toBe("Stupify");
-
-            done();
-        });
-    })
-
-    it("Should be able to create wizards using .create", function(done){
-        var hermoine = Wizard.create("HG", "Hermoine Granger", "Cat");
-
-        expect(hermoine.pInfo.id).toBe("HG");
-        expect(hermoine.name).toBe("Hermoine Granger");
-        expect(hermoine.petType).toBe("Cat");
-        expect(Wizard.items.length).toBe(1);
-        expect(Wizard.items[0]).toBe(hermoine);
-        expect(Wizard.wizards.length).toBe(1);
-        expect(Wizard.wizards[0]).toBe(hermoine);
-
-        emulateRefresh(function(){
-            var hermoine = Wizard.find("HG");
-            expect(hermoine.pInfo.id).toBe("HG");
-            expect(hermoine.name).toBe("Hermoine Granger");
-            expect(hermoine.petType).toBe("Cat");
-            expect(Wizard.items.length).toBe(1);
-            expect(Wizard.items[0]).toBe(hermoine);
-            expect(Wizard.wizards.length).toBe(1);
-            expect(Wizard.wizards[0]).toBe(hermoine);
-            done();
-        })
-    })
-
-    it("Should be able to create wizards using new", function(done){
-        var hermoine = new Wizard("Hermoine Granger", "Cat");
-
-        expect(hermoine.name).toBe("Hermoine Granger");
-        expect(hermoine.petType).toBe("Cat");
-
-        expect(Wizard.items.length).toBe(1);
-        expect(Wizard.items[0]).toBe(hermoine);
-        expect(Wizard.wizards.length).toBe(1);
-        expect(Wizard.wizards[0]).toBe(hermoine);
-
-        emulateRefresh(function(){
-            var hermoine = Wizard.findOne({name:"Hermoine Granger"});
-
-            expect(hermoine.name).toBe("Hermoine Granger");
-            expect(hermoine.petType).toBe("Cat");
-
-            expect(Wizard.items.length).toBe(1);
-            expect(Wizard.items[0]).toBe(hermoine);
-            expect(Wizard.wizards.length).toBe(1);
-            expect(Wizard.wizards[0]).toBe(hermoine);
-            done();
-        })
-    })
-
-    it("Should be able to retrive wizards using .find", function(done){
-        var fred = new Wizard("Fred Weasly");
-        var george = new Wizard("George Weasly");
-        var hermoine = new Wizard("Hermoine Granger", "Cat");
-
-        expect(Wizard.findOne(hermoine.pInfo.id)).toBe(hermoine);
-        expect(Wizard.find({name: /Weasly/})[0]).toBe(fred);
-        expect(Wizard.find({name: /Weasly/})[1]).toBe(george);
-
-        emulateRefresh(function(){
-            var fred = Wizard.findOne({name:"Fred Weasly"});
-            var george = Wizard.findOne({name:"George Weasly"});
-            var hermoine = Wizard.findOne({name:"Hermoine Granger"});
-
-            expect(Wizard.findOne(hermoine.pInfo.id)).toBe(hermoine);
-            expect(Wizard.find({name: /Weasly/})[0]).toBe(fred);
-            expect(Wizard.find({name: /Weasly/})[1]).toBe(george);
-
-            done();
-        })
-    })
-
-    it("A found wizard should be of the type, wizard", function(done){
-        var george = new Wizard("George Weasly");
-
-        expect(george.constructor.name).toBe("Wizard");
-        expect(Wizard.find({name: /Weasly/})[0].constructor.name).toBe("Wizard");
-
-        emulateRefresh(function(){
-            var george = Wizard.findOne({name:"George Weasly"});
-
-            expect(george.constructor.name).toBe("Wizard");
-            expect(Wizard.find({name: /Weasly/})[0].constructor.name).toBe("Wizard");
-
-            done();
-        })
-    })
-
-    it("Should be able to retrive wizards using .findOne", function(done){
-        var fred = new Wizard("Fred Weasly");
-        var george = new Wizard("George Weasly");
-        var hermoine = new Wizard("Hermoine Granger", "Cat");
-
-        expect(Wizard.findOne({name: /Weasly/})).toBe(fred);
-        expect(Wizard.findOne(fred.pInfo.id)).toBe(fred);
-
-        emulateRefresh(function(){
-            var fred = Wizard.findOne({name:"Fred Weasly"});
-            var george = Wizard.findOne({name:"George Weasly"});
-            var hermoine = Wizard.findOne({name:"Hermoine Granger"});
-
-            expect(Wizard.findOne({name: /Weasly/})).toBe(fred);
-            expect(Wizard.findOne(fred.pInfo.id)).toBe(fred);
-
-            done()
-        })
-    })
-
-    it("Should be able to remove wizards using remove(item)", function(done){
-        var fred = new Wizard("Fred Weasly");
-        var george = new Wizard("George Weasly");
-
-        fred.brother = george;
-
-        expect(Wizard.items.length).toBe(2);
-        expect(cache.get(fred.pInfo.id + ".name")).toBe("Fred Weasly");
-        Wizard.remove(fred);
-        expect(cache.get(fred.pInfo.id + ".name")).toBe(null);
-        expect(Wizard.items.length).toBe(1);
-        expect(Wizard.findOne({name:"Fred Weasly"})).toBe(undefined);
-        expect(Wizard.findOne({name:"George Weasly"})).toBe(george);
-
-        emulateRefresh(function(){
-            expect(Wizard.items.length).toBe(1);
-            expect(Wizard.findOne({name:"Fred Weasly"})).toBe(undefined);
-            done();
-        })
-    })
-
-    it("Should be able to remove wizards using remove(item.id)", function(done){
-        var fred = new Wizard("Fred Weasly");
-        var george = new Wizard("George Weasly");
-
-        fred.brother = george;
-
-        expect(Wizard.items.length).toBe(2);
-        expect(cache.get(fred.pInfo.id + ".name")).toBe("Fred Weasly");
-        Wizard.remove(fred.pInfo.id);
-        expect(cache.get(fred.pInfo.id + ".name")).toBe(null);
-        expect(Wizard.items.length).toBe(1);
-        expect(Wizard.findOne({name:"Fred Weasly"})).toBe(undefined);
-        expect(Wizard.findOne({name:"George Weasly"})).toBe(george);
-
-        emulateRefresh(function(){
-            expect(Wizard.items.length).toBe(1);
-            expect(Wizard.findOne({name:"Fred Weasly"})).toBe(undefined);
-            done();
-        })
-    })
-
-    it("Should be able to remove wizards using obliterate(item.id)", function(done){
-        var fred = new Wizard("Fred Weasly");
-        var george = new Wizard("George Weasly");
-
-        fred.brother = george;
-
-        expect(Wizard.items.length).toBe(2);
-        expect(cache.get(fred.pInfo.id + ".name")).toBe("Fred Weasly");
-        expect(cache.get(george.pInfo.id + ".name")).toBe("George Weasly");
-        Wizard.obliterate(fred);
-        expect(cache.get(fred.pInfo.id + ".name")).toBe(null);
-        expect(cache.get(george.pInfo.id + ".name")).toBe(null);
-        expect(Wizard.items.length).toBe(0);
-        expect(Wizard.findOne({name:"Fred Weasly"})).toBe(undefined);
-        expect(Wizard.findOne({name:"George Weasly"})).toBe(undefined);
-
-        emulateRefresh(function(){
-            expect(Wizard.findOne({name:"Fred Weasly"})).toBe(undefined);
-            expect(Wizard.findOne({name:"George Weasly"})).toBe(undefined);
-            done();
-        })
-    })
-})
-
-
-describe("A Persistient Object", function(){
+//
+// describe('A wizard', function() {
+//     var item;
+//     var changed;
+//
+//     beforeEach(function(done){
+//         clearCache(function(){
+//             registerObjects();
+//             done();
+//         });
+//     })
+//
+//     afterEach(function(done){
+//         clearCache(function(){
+//             registerObjects();
+//             done();
+//         });
+//     })
+//
+//     it("Should have only two iterable properties", function(){
+//         var hermoine = Wizard.findOrCreate("Hermoine Granger");
+//
+//         var n = 0;
+//         for(var i in hermoine){
+//             n++;
+//         }
+//         expect(n).toBe(5);
+//     })
+//
+//     it("Should remember their pet type after a refresh", function(done){
+//         var hermoine = Wizard.create("Hermoine Granger")
+//
+//         hermoine.petType = "Cat";
+//         expect(hermoine.petType).toBe("Cat");
+//
+//         emulateRefresh(function(){
+//             var hermoine = Wizard.find("Hermoine Granger");
+//             expect(hermoine.petType).toBe("Cat");
+//             done()
+//         });
+//     })
+//
+//     it("Should be able to make and remember friends", function(done){
+//         var hermoine = new Wizard("Hermoine Granger");
+//         var ron = new Wizard("Ron Weasly");
+//
+//         ron.petType = "Lost";
+//         expect(ron.petType).toBe("Lost");
+//
+//         hermoine.befriend(ron);
+//         ron.befriend(hermoine);
+//
+//         hermoine.friends["Ron Weasly"].petType = "Frog"
+//         expect(ron.petType).toBe("Frog");
+//
+//         expect(hermoine.friends["Ron Weasly"]).toBe(ron);
+//         expect(ron.friends["Hermoine Granger"]).toBe(hermoine);
+//
+//         emulateRefresh(function(){
+//             var hermoine = Wizard.findOne({name:"Hermoine Granger"});
+//             var ron = Wizard.findOne({name:"Ron Weasly"});
+//
+//             expect(hermoine.friends["Ron Weasly"]).toBe(ron);
+//             expect(ron.friends["Hermoine Granger"]).toBe(hermoine);
+//             expect(hermoine.friends["Ron Weasly"].petType).toBe("Frog");
+//             done();
+//         });
+//     })
+//
+//     it("Should be able to learn spells", function(done){
+//         var hermoine = new Wizard("Hermoine Granger");
+//
+//         hermoine.learn("Expeco Petronum")
+//         hermoine.learn("Wingardium Leviosah");
+//         expect(hermoine.spells.length).toBe(2);
+//         expect(hermoine.spells[0]).toBe("Expeco Petronum");
+//         expect(hermoine.spells[1]).toBe("Wingardium Leviosah");
+//
+//         emulateRefresh(function(){
+//             var hermoine = Wizard.findOne({name:"Hermoine Granger"});
+//
+//             expect(hermoine.spells.length).toBe(2);
+//             expect(hermoine.spells[0]).toBe("Expeco Petronum");
+//             expect(hermoine.spells[1]).toBe("Wingardium Leviosah");
+//
+//             hermoine.learn("Stupify");
+//
+//             expect(hermoine.spells.length).toBe(3);
+//             expect(hermoine.spells[2]).toBe("Stupify");
+//
+//             done();
+//         });
+//     })
+//
+//     it("Should be able to create wizards using .create", function(done){
+//         var hermoine = Wizard.create("HG", "Hermoine Granger", "Cat");
+//
+//         expect(hermoine.pInfo.id).toBe("HG");
+//         expect(hermoine.name).toBe("Hermoine Granger");
+//         expect(hermoine.petType).toBe("Cat");
+//         expect(Wizard.items.length).toBe(1);
+//         expect(Wizard.items[0]).toBe(hermoine);
+//         expect(Wizard.wizards.length).toBe(1);
+//         expect(Wizard.wizards[0]).toBe(hermoine);
+//
+//         emulateRefresh(function(){
+//             var hermoine = Wizard.find("HG");
+//             expect(hermoine.pInfo.id).toBe("HG");
+//             expect(hermoine.name).toBe("Hermoine Granger");
+//             expect(hermoine.petType).toBe("Cat");
+//             expect(Wizard.items.length).toBe(1);
+//             expect(Wizard.items[0]).toBe(hermoine);
+//             expect(Wizard.wizards.length).toBe(1);
+//             expect(Wizard.wizards[0]).toBe(hermoine);
+//             done();
+//         })
+//     })
+//
+//     it("Should be able to create wizards using new", function(done){
+//         var hermoine = new Wizard("Hermoine Granger", "Cat");
+//
+//         expect(hermoine.name).toBe("Hermoine Granger");
+//         expect(hermoine.petType).toBe("Cat");
+//
+//         expect(Wizard.items.length).toBe(1);
+//         expect(Wizard.items[0]).toBe(hermoine);
+//         expect(Wizard.wizards.length).toBe(1);
+//         expect(Wizard.wizards[0]).toBe(hermoine);
+//
+//         emulateRefresh(function(){
+//             var hermoine = Wizard.findOne({name:"Hermoine Granger"});
+//
+//             expect(hermoine.name).toBe("Hermoine Granger");
+//             expect(hermoine.petType).toBe("Cat");
+//
+//             expect(Wizard.items.length).toBe(1);
+//             expect(Wizard.items[0]).toBe(hermoine);
+//             expect(Wizard.wizards.length).toBe(1);
+//             expect(Wizard.wizards[0]).toBe(hermoine);
+//             done();
+//         })
+//     })
+//
+//     it("Should be able to retrive wizards using .find", function(done){
+//         var fred = new Wizard("Fred Weasly");
+//         var george = new Wizard("George Weasly");
+//         var hermoine = new Wizard("Hermoine Granger", "Cat");
+//
+//         expect(Wizard.findOne(hermoine.pInfo.id)).toBe(hermoine);
+//         expect(Wizard.find({name: /Weasly/})[0]).toBe(fred);
+//         expect(Wizard.find({name: /Weasly/})[1]).toBe(george);
+//
+//         emulateRefresh(function(){
+//             var fred = Wizard.findOne({name:"Fred Weasly"});
+//             var george = Wizard.findOne({name:"George Weasly"});
+//             var hermoine = Wizard.findOne({name:"Hermoine Granger"});
+//
+//             expect(Wizard.findOne(hermoine.pInfo.id)).toBe(hermoine);
+//             expect(Wizard.find({name: /Weasly/})[0]).toBe(fred);
+//             expect(Wizard.find({name: /Weasly/})[1]).toBe(george);
+//
+//             done();
+//         })
+//     })
+//
+//     it("A found wizard should be of the type, wizard", function(done){
+//         var george = new Wizard("George Weasly");
+//
+//         expect(george.constructor.name).toBe("Wizard");
+//         expect(Wizard.find({name: /Weasly/})[0].constructor.name).toBe("Wizard");
+//
+//         emulateRefresh(function(){
+//             var george = Wizard.findOne({name:"George Weasly"});
+//
+//             expect(george.constructor.name).toBe("Wizard");
+//             expect(Wizard.find({name: /Weasly/})[0].constructor.name).toBe("Wizard");
+//
+//             done();
+//         })
+//     })
+//
+//     it("Should be able to retrive wizards using .findOne", function(done){
+//         var fred = new Wizard("Fred Weasly");
+//         var george = new Wizard("George Weasly");
+//         var hermoine = new Wizard("Hermoine Granger", "Cat");
+//
+//         expect(Wizard.findOne({name: /Weasly/})).toBe(fred);
+//         expect(Wizard.findOne(fred.pInfo.id)).toBe(fred);
+//
+//         emulateRefresh(function(){
+//             var fred = Wizard.findOne({name:"Fred Weasly"});
+//             var george = Wizard.findOne({name:"George Weasly"});
+//             var hermoine = Wizard.findOne({name:"Hermoine Granger"});
+//
+//             expect(Wizard.findOne({name: /Weasly/})).toBe(fred);
+//             expect(Wizard.findOne(fred.pInfo.id)).toBe(fred);
+//
+//             done()
+//         })
+//     })
+//
+//     it("Should be able to remove wizards using remove(item)", function(done){
+//         var fred = new Wizard("Fred Weasly");
+//         var george = new Wizard("George Weasly");
+//
+//         fred.brother = george;
+//
+//         expect(Wizard.items.length).toBe(2);
+//         expect(cache.get(fred.pInfo.id + ".name")).toBe("Fred Weasly");
+//         Wizard.remove(fred);
+//         expect(cache.get(fred.pInfo.id + ".name")).toBe(null);
+//         expect(Wizard.items.length).toBe(1);
+//         expect(Wizard.findOne({name:"Fred Weasly"})).toBe(undefined);
+//         expect(Wizard.findOne({name:"George Weasly"})).toBe(george);
+//
+//         emulateRefresh(function(){
+//             expect(Wizard.items.length).toBe(1);
+//             expect(Wizard.findOne({name:"Fred Weasly"})).toBe(undefined);
+//             done();
+//         })
+//     })
+//
+//     it("Should be able to remove wizards using remove(item.id)", function(done){
+//         var fred = new Wizard("Fred Weasly");
+//         var george = new Wizard("George Weasly");
+//
+//         fred.brother = george;
+//
+//         expect(Wizard.items.length).toBe(2);
+//         expect(cache.get(fred.pInfo.id + ".name")).toBe("Fred Weasly");
+//         Wizard.remove(fred.pInfo.id);
+//         expect(cache.get(fred.pInfo.id + ".name")).toBe(null);
+//         expect(Wizard.items.length).toBe(1);
+//         expect(Wizard.findOne({name:"Fred Weasly"})).toBe(undefined);
+//         expect(Wizard.findOne({name:"George Weasly"})).toBe(george);
+//
+//         emulateRefresh(function(){
+//             expect(Wizard.items.length).toBe(1);
+//             expect(Wizard.findOne({name:"Fred Weasly"})).toBe(undefined);
+//             done();
+//         })
+//     })
+//
+//     it("Should be able to remove wizards using obliterate(item.id)", function(done){
+//         var fred = new Wizard("Fred Weasly");
+//         var george = new Wizard("George Weasly");
+//
+//         fred.brother = george;
+//
+//         expect(Wizard.items.length).toBe(2);
+//         expect(cache.get(fred.pInfo.id + ".name")).toBe("Fred Weasly");
+//         expect(cache.get(george.pInfo.id + ".name")).toBe("George Weasly");
+//         Wizard.obliterate(fred);
+//         expect(cache.get(fred.pInfo.id + ".name")).toBe(null);
+//         expect(cache.get(george.pInfo.id + ".name")).toBe(null);
+//         expect(Wizard.items.length).toBe(0);
+//         expect(Wizard.findOne({name:"Fred Weasly"})).toBe(undefined);
+//         expect(Wizard.findOne({name:"George Weasly"})).toBe(undefined);
+//
+//         emulateRefresh(function(){
+//             expect(Wizard.findOne({name:"Fred Weasly"})).toBe(undefined);
+//             expect(Wizard.findOne({name:"George Weasly"})).toBe(undefined);
+//             done();
+//         })
+//     })
+// })
+//
+//
+describe("A Persistent Object", function(){
     beforeEach(clearCache)
     afterEach(clearCache)
 
     it("Should get it's properties direct from localStorage", function(done){
-        expect(localStorage.getItem("A.b")).toBe(null);
-        var a = Pobject.create("A");
+        var a = new A();
         a.b = 1;
+
         fireObjectObserves(function(){
             expect(a.b).toBe(1);
-            localStorage.setItem("A.b", 2)
+            localStorage.setItem(a.metaData.id + ".b", 2)
             expect(a.b).toBe(2);
             done()
         })
     })
 
     it("Should deal with adopting objects that are already cached", function(done){
-        var a = Pobject.create("A");
-        var b = Pobject.create("B");
-        var c = Pobject.create("C");
+        var a = new A();
+        var b = new A();
+        var c = new A();
         a.b = b;
         a.c = c;
         expect(a.b).toBe(b);
@@ -415,10 +421,15 @@ describe("A Persistient Object", function(){
         expect(a.b.value).toBe(1);
         expect(a.c.value).toBe(2);
 
+		var aid = a.metaData.id
+		var bid = b.metaData.id
+		var cid = c.metaData.id
+
         emulateRefresh(function(){
-            var a = Pobject.load("A");
-            var b = Pobject.load("B");
-            var c = Pobject.load("C");
+        	a = model.data[a.metaData.id];
+            b = model.data[b.metaData.id];
+            c = model.data[c.metaData.id];
+
             expect(a.b).toBe(b);
             expect(a.c).toBe(c);
             expect(a.b.value).toBe(1);
@@ -426,60 +437,49 @@ describe("A Persistient Object", function(){
             done()
         })
     })
-
+//
     it("Should deal with having starting with objects to adopt", function(done){
-        var b = Pobject.create("B");
+		var a = new A();
+		a.c = 1;
 
-        class A{
+		class B extends model.Persistent{
             constructor(){
-                this.b = b;
+				super();
+                this.a = a;
             }
         }
 
-        A = registerType(A);
+        B = model.registerType(B);
 
-        A.loadAll();
+        var b = new B();
 
-        b.c = 1;
+        expect(b.a).toBe(a);
 
-        var a = A.create("t");
-
-        expect(a.b).toBe(b);
-
-        emulateRefresh(function(){
-            class A{
-                constructor(){
-                    this.b = b;
-                }
-            }
-
-            A = registerType(A);
-            A.loadAll();
-
-            var a = A.find("t");
-            expect(a.b.c).toBe(1);
-            done()
-        })
+		done();
     })
 
     it("Should deal with adding objects that contain objects are already cached", function(done){
-        var a = Pobject.create("A");
-        var b = Pobject.create("B");
+        var a = new A();
+        var b = new A();
+        var c = new A();
 
-        a.b = {b:b};
-        b.c = 1;
-        expect(a.b.b.c).toBe(1);
+		b.c = c;
+        a.b = b;
+        c.d = 1;
+
+        expect(a.b.c.d).toBe(1);
+
 
         emulateRefresh(function(){
-           var a = Pobject.load("A");
-           expect(a.b.b.c).toBe(1);
+        	a = model.data[a.metaData.id];
+           expect(a.b.c.d).toBe(1);
            done()
         })
     })
 
     it("Should deal with recursive objects", function(done){
-        var a = Pobject.create("A");
-        var b = Pobject.create("B");
+        var a = new A();
+        var b = new A();
 
         a.a = a;
         b.a = a;
@@ -489,10 +489,11 @@ describe("A Persistient Object", function(){
         expect(b.a).toBe(a);
         expect(a.b).toBe(b);
 
+		var bid = b.metaData.id;
 
         emulateRefresh(function(){
-           var a = Pobject.load("A");
-           var b = Pobject.load("B");
+			a = model.data[a.metaData.id];
+			b = model.data[b.metaData.id];
 
             expect(a.a).toBe(a);
             expect(b.a).toBe(a);
@@ -503,72 +504,51 @@ describe("A Persistient Object", function(){
     })
 
     it("Should correctly store booleans", function(done){
-        var a = Pobject.create("A");
+        var a = new A();
 
         a.b = false;
         expect(a.b).toBe(false);
 
-        emulateRefresh(function(){
-           var a = Pobject.load("A");
-           expect(a.b).toBe(false);
-           done()
-        })
-    })
-
-    it("Should correctly store strings named after booleans", function(done){
-        var a = Pobject.create("A");
-
-        a.b = "false";
-        expect(a.b).toBe("false");
 
         emulateRefresh(function(){
-           var a = Pobject.load("A");
-           expect(a.b).toBe("false");
-           done()
+			a = model.data[a.metaData.id];
+			expect(a.b).toBe(false);
+			done()
         })
     })
 
     it("Should delete the property in the chache if it's deleted in the model", function(done){
-        var a = Pobject.create("A");
+        var a = new A();
         a.b = 1;
         expect(a.b).toBe(1);
 
         fireObjectObserves(function(){
-            expect(localStorage.getItem("A.b")).toBe('1');
+            expect(localStorage.getItem(a.metaData.id + ".b")).toBe('1');
 
             delete a.b;
 
             fireObjectObserves(function(){
-                expect(cache.get("A").childIDs).toEqual([]);
+                expect(localStorage.getItem(a.metaData.id + ".b")).toBe(null);
                 done();
             })
         })
     })
 
-    it("Should override anything before it when created", function(){
-        var a = Pobject.create("A");
-        a.b = 1;
 
-        var a = Pobject.create("a");
-        expect(a.b).toBe(undefined);
-    })
-
-    it("Should be undefined if it dosn't exist", function(){
-        var a = Pobject.load("a");
-        expect(a).toBe(undefined);
-    })
 
     it("Should cast numeric strings to integers", function(done){
-        var a = Pobject.create("A");
-        a.b = 1;
+        var a = new A();
+
+		a.b = 1;
         a.c = "1";
+
         expect(a.b).toBe(1);
         expect(_.isNumber(a.b)).toBe(true);
-        expect(a.c).toBe("1");
-        expect(_.isNumber(a.c)).toBe(false);
+        expect(a.c).toBe(1);
+        expect(_.isNumber(a.c)).toBe(true);
 
         emulateRefresh(function(){
-            var a = Pobject.load("A");
+            a = model.data[a.metaData.id];
 
             expect(a.b).toBe(1);
             expect(_.isNumber(a.b)).toBe(true);
@@ -578,194 +558,48 @@ describe("A Persistient Object", function(){
         });
     })
 
-    it("Should 'load or new' an item when using findOrCreate", function(done){
-        expect(Pobject.load("A")).toBe(undefined);
-
-        var a = Pobject.findOrCreate("A");
-        expect(a.b).toBe(undefined);
-        a.b = 1;
-
-        emulateRefresh(function(){
-            expect(Pobject.findOrCreate("A").b).toBe(1);
-
-            emulateRefresh(function(){
-                var a = Pobject.findOrCreate("A");
-                expect(a.b).toBe(1);
-                done();
-            })
-        })
-    })
-
-    it("Should create and load deeply nested circular objects", function(done){
-        class A{
-            constructor(id){
-                this.value;
-                this.bs = {};
-            }
-        }
-
-        var AClass = registerType(A);
-
-        class B{
-            constructor(id){
-                this.value;
-                this.cs = {};
-            }
-        }
-
-        var BClass = registerType(B);
-
-        class C{
-            constructor(id){
-                this.value;
-                this.as = {};
-            }
-        }
-
-        var CClass = registerType(C);
-
-        initialiseData();
-
-        var a = AClass.create("a");
-        var b = BClass.create("b");
-        var c = CClass.create("c");
-
-        a.bs['b'] = b;
-        b.cs['c'] = c;
-        c.as['a'] = a;
-
-        a.value = 1;
-        a.bs.b.value = 2;
-        a.bs.b.cs.c.value = 3;
-        a.bs.b.cs.c.as.a.value = 4;
-
-
-        emulateRefresh(function(){
-            AClass = registerType(A);
-            BClass = registerType(B);
-            CClass = registerType(C);
-
-            initialiseData();
-
-            var a = AClass.load("a");
-            var b = BClass.load("b");
-            var c = CClass.load("c");
-
-            expect(a.value).toBe(4);
-            expect(b.value).toBe(2);
-            expect(c.value).toBe(3);
-            done()
-        })
-    })
-
     it("Should handle object properties changing to other objects", function(done){
-        var a = Pobject.create("A");
-        var b = Pobject.create("B");
-        var c = Pobject.create("C");
-        var d = Pobject.create("D");
+        var a = new A();
+        var b = new A();
+        var c = new A();
 
-        a.b = b;
-        a.c = {c:c};
+        a.b = 1;
+        a.c = c;
 
-        b.value = 1;
-        c.value = 2;
-        d.value = 3;
-
-        expect(a.b.value).toBe(1);
-        expect(a.c.c.value).toBe(2);
-        expect(d.value).toBe(3);
+        expect(a.b).toBe(1);
+        expect(a.c).toBe(c);
 
         emulateRefresh(function(){
-            var a = Pobject.load("A");
-            var b = Pobject.load("B");
-            var c = Pobject.load("C");
-            var d = Pobject.load("D");
+            a = model.data[a.metaData.id];
+            b = model.data[b.metaData.id];
+            c = model.data[c.metaData.id];
 
-            expect(a.b.value).toBe(1);
-            expect(a.c.c.value).toBe(2);
-            expect(d.value).toBe(3);
+            expect(a.b).toBe(1);
+            expect(a.c).toBe(c);
 
-            a.b = d;
-            a.c.c = d;
+            a.b = c;
+            a.c = 1;
 
             emulateRefresh(function(){
-                var a = Pobject.load("A");
+				a = model.data[a.metaData.id];
+				b = model.data[b.metaData.id];
+				c = model.data[c.metaData.id];
 
-                expect(a.b.value).toBe(3);
-                expect(a.c.c.value).toBe(3);
+                expect(a.b).toBe(c);
+                expect(a.c).toBe(1);
 
                 done()
             })
         })
     })
 
-    it("Should handle adopted objects being changed", function(done){
-        var a = Pobject.create("A");
-        var b = Pobject.create("B");
-        var c = Pobject.create("C");
-
-        a.b = b;
-        b.value = 1;
-        c.value = 2;
-
-        emulateRefresh(function(){
-            var a = Pobject.load("A");
-            expect(a.b.value).toBe(1);
-            a.b = c;
-
-            emulateRefresh(function(){
-                var a = Pobject.load("A");
-                expect(a.b.value).toBe(2);
-                done();
-            })
-        })
-    })
-
-    it("Should handle having a number property changed to an object", function(done){
-
-        var a = Pobject.create("A");
-
-        a.b = 1;
-
-        fireObjectObserves(function(){
-            expect(a.b).toBe(1);
-            a.b = {d:1};
-
-            expect(a.b.d).toBe(1);
-
-            fireObjectObserves(function(){
-                expect(localStorage.getItem(a.b.pInfo.id + ".d")).toBe('1');
-                done();
-            })
-        })
-    })
-
-    it("Should handle having a object property changed to a number", function(done){
-        var a = Pobject.create("A");
-
-        a.c = {d:1};
-
-        fireObjectObserves(function(){
-            expect(a.c.d).toEqual(1);
-
-            a.c = 1;
-
-            expect(a.c).toBe(1);
-
-            fireObjectObserves(function(){
-                expect(localStorage.getItem("A.c")).toBe('1');
-                done();
-            })
-        })
-    })
-
+	// Fails, as we don't check for property being a function first
     it("Should handle having a property changed to a function", function(done){
-        var a = Pobject.create("A");
-
+        var a = new A();
         a.b = 1;
 
         emulateRefresh(function(){
-            var a = Pobject.load("A");
+            a = model.data[a.metaData.id];
             expect(a.b).toBe(1);
 
             a.b = function (){
@@ -775,7 +609,7 @@ describe("A Persistient Object", function(){
             expect(a.b()).toBe(1);
 
             emulateRefresh(function(){
-                var a = Pobject.load("A");
+                a = model.data[a.metaData.id];
 
                 expect(a.b).toBe(undefined);
                 done();
@@ -783,239 +617,88 @@ describe("A Persistient Object", function(){
         })
     })
 
-    it("Should handle being constructed with a function", function(done){
+	// Fails, as no current way of knowing if a string if a boolean when getting from cache
+	it("Should correctly store strings named after booleans", function(done){
+		var a = new A();
 
-        class A{
-            constructor(){
-                this.b = function(){
-                    return 1;
-                }
-            }
-        }
+		a.b = "false";
+		expect(a.b).toBe("false");
 
-        A.dontCache = ["b"]
 
-        var AClass = registerType(A);
+		emulateRefresh(function(){
+		   a = model.data[a.metaData.id];
+		   expect(a.b).toBe("false");
+		   done()
+		})
+	})
 
-        AClass.loadAll();
+	// Fails, as no current way of knowing if a string if a boolean when getting from cache
+	it("Should be able to to string without dying", function(done){
+		var a = new A();
+		a.toString();
+	})
 
-        var a = AClass.create("Asdf");
-
-        expect(a.b()).toBe(1);
-
-        expect(a.pInfo.childIDs.length).toBe(0);
-        expect(_.keys(a.pInfo.siblingIDs).length).toBe(0);
-
-        emulateRefresh(function(){
-            AClass = registerType(A);
-            AClass.loadAll();
-
-            var a = AClass.load("Asdf");
-            expect(a.b()).toBe(1);
-
-            expect(a.pInfo.childIDs.length).toBe(0);
-            expect(_.keys(a.pInfo.siblingIDs).length).toBe(0);
-
-            done()
-        })
-    })
-
-    it("Should handle adopted objects changed to flat values and vice versa", function(done){
-        var a = Pobject.create("A");
-        var b = Pobject.create("B");
-
-        a.b = b;
-        a.c = 1;
-
-        emulateRefresh(function(){
-            var a = Pobject.load("A");
-            var b = a.b;
-            a.b = a.c;
-            a.c = b;
-
-            expect(a.b).toBe(1);
-            expect(a.c).toBe(b);
-            emulateRefresh(function(){
-                expect(localStorage.getItem("A.c")).not.toBe("1")
-                var a = Pobject.load("A");
-                var b = Pobject.load("B");
-                expect(a.b).toBe(1);
-                expect(a.c).toBe(b);
-                done();
-            })
-        })
-    })
-
-    it("Should load items by priotity", function(done){
-        var AClass;
-        var BClass;
-
-        class A{
-            constructor(){
-                this.prop = 1;
-                this.b = BClass.create();
-            }
-        }
-
-        class B{
-
-        }
-
-        AClass = registerType(A);
-        BClass = registerType(B);
-        BClass.priotity = 0;
-
-        initialiseData();
-
-        var a = AClass.create();
-
-        expect(a.prop).toBe(1);
-        expect(a.b.constructor).toBe(B);
-
-        //So we have these two classes, where a has the child/sibling property b.
-        //
-        //Which is cool, except there might be problems when we refresh, if we try to register the classes again and they load everything and the B class hasn't been registered yet.
-
-        //You've gone to init the data it's done the a, but it's got a b child. But B aint got to items yet.
-
-        emulateRefresh(function(){
-            AClass = registerType(A);
-            BClass = registerType(B);
-
-            initialiseData();
-
-            expect(AClass.items[0].b).toBe(BClass.items[0]);
-            expect(AClass.items[0].b.constructor).toBe(B);
-
-            done();
-        })
-    })
-})
-
-// describe("A Persistient Array", function(){
-//     beforeEach(clearCache)
-//     afterEach(clearCache)
-
-//     it("Should give the array persistient info", function(){
-//         var a = new Parray("A");
-//         expect(a.pInfo.id).toBe("A")
-//     })
-
-//     it("Should store it's indexes to the cache it's properties to the localStorage", function(){
-//         expect(localStorage.getItem("A.0")).toBe(null);
-//         expect(localStorage.getItem("A.1")).toBe(null);
-
-//         var a = new Parray.save("A", [1,2]);
-
-//         expect(localStorage.getItem("A.0")).toBe('1');
-//         expect(localStorage.getItem("A.1")).toBe('2');
-//     })
-
-//     it("Should allow for the adding of new indexes", function(done){
-//         expect(localStorage.getItem("A.0")).toBe(null);
-//         expect(localStorage.getItem("A.1")).toBe(null);
-
-//         var a = new Parray("A");
-
-//         a.push(1);
-//         a.push(2);
-
-//         fireObjectObserves(function(){
-//             expect(localStorage.getItem("A.0")).toBe('1');
-//             expect(localStorage.getItem("A.1")).toBe('2');
-//             done();
-//         })
-//     })
-
-//     it("Should account for the shuffling of those indexes", function(){
-//         expect(localStorage.getItem("A.0")).toBe(null);
-//         expect(localStorage.getItem("A.1")).toBe(null);
-//         expect(localStorage.getItem("A.2")).toBe(null);
-//         expect(localStorage.getItem("A.3")).toBe(null);
-//         expect(localStorage.getItem("A.4")).toBe(null);
-
-//         var a = Parray.save("A", [2,1,5,3,4]);
-
-//         a.sort();
-
-//         expect(localStorage.getItem("A.0")).toBe('1');
-//         expect(localStorage.getItem("A.1")).toBe('2');
-//         expect(localStorage.getItem("A.2")).toBe('3');
-//         expect(localStorage.getItem("A.3")).toBe('4');
-//         expect(localStorage.getItem("A.4")).toBe('5');
-//     })
-
-//     it("Should adopt objects and other arrays", function(done){
-//         var b = Pobject.create("B");
-//         var c = Parray.create("C");
-//         var a = Parray.save("A", [b, c]);
-
-//         expect(a[0]).toBe(b);
-//         expect(a[1]).toBe(c);
-
-//         expect(a.pInfo.siblingIDs).toEqual({0:"B", 1:"C"});
-
-//         a.reverse();
-
-//         expect(a[0]).toBe(c);
-//         expect(a[1]).toBe(b);
-
+//
+//     it("Should handle being constructed with a function", function(done){
+//
+//         class A{
+//             constructor(){
+//                 this.b = function(){
+//                     return 1;
+//                 }
+//             }
+//         }
+//
+//         A.dontCache = ["b"]
+//
+//         var AClass = registerType(A);
+//
+//         AClass.model.load();
+//
+//         var a = AClass.create("Asdf");
+//
+//         expect(a.b()).toBe(1);
+//
+//         expect(a.pInfo.childIDs.length).toBe(0);
+//         expect(_.keys(a.pInfo.siblingIDs).length).toBe(0);
+//
 //         emulateRefresh(function(){
-//             var a = Parray.load("A");
-//             var b = Pobject.load("B");
-//             var c = Parray.load("C");
-
-//             expect(a.pInfo.siblingIDs).toEqual({0:"C", 1:"B"});
-
-//             expect(a[0]).toBe(c);
-//             expect(a[1]).toBe(b);
-
-//             a.reverse();
-
-//             expect(a[0]).toBe(b);
-//             expect(a[1]).toBe(c);
-
-//             done();
-//         })
-//     })
-
-//     it("Should account for values changing types ", function(done){
-//         var persObject = new Pobject("B");
-//         var persArray = new Parray("C");
-//         var object = {};
-//         var array = [];
-//         var string = "Death is lighter than a feather";
-//         var integer = 1;
-
-//         var a = Parray.save("A", [persObject, persArray, object, array, string, integer]);
-
-//         expect(a[0]).toBe(persObject);
-//         expect(a[1]).toBe(persArray);
-//         expect(a[2]).toBe(object);
-//         expect(a[3]).toBe(array);
-//         expect(a[4]).toBe(string);
-//         expect(a[5]).toBe(integer);
-
-//         a.reverse();
-
-//         expect(a[5]).toBe(persObject);
-//         expect(a[4]).toBe(persArray);
-//         expect(a[3]).toBe(object);
-//         expect(a[2]).toBe(array);
-//         expect(a[1]).toBe(string);
-//         expect(a[0]).toBe(integer);
-
-//         fireObjectObserves(function(){
-//             var a = Parray.load("A");
-
-//             expect(a[5]).toBe(persObject);
-//             expect(a[4]).toBe(persArray);
-//             expect(a[3]).toBe(object);
-//             expect(a[2]).toBe(array);
-//             expect(a[1]).toBe(string);
-//             expect(a[0]).toBe(integer);
-
+//             AClass = registerType(A);
+//             AClass.model.load();
+//
+//             var a = AClass.load("Asdf");
+//             expect(a.b()).toBe(1);
+//
+//             expect(a.pInfo.childIDs.length).toBe(0);
+//             expect(_.keys(a.pInfo.siblingIDs).length).toBe(0);
+//
 //             done()
 //         })
 //     })
-// })
+//
+//     it("Should handle adopted objects changed to flat values and vice versa", function(done){
+//         var a = Pobject.create("A");
+//         var b = Pobject.create("B");
+//
+//         a.b = b;
+//         a.c = 1;
+//
+//         emulateRefresh(function(){
+//             var a = Pobject.load("A");
+//             var b = a.b;
+//             a.b = a.c;
+//             a.c = b;
+//
+//             expect(a.b).toBe(1);
+//             expect(a.c).toBe(b);
+//             emulateRefresh(function(){
+//                 expect(localStorage.getItem("A.c")).not.toBe("1")
+//                 var a = Pobject.load("A");
+//                 var b = Pobject.load("B");
+//                 expect(a.b).toBe(1);
+//                 expect(a.c).toBe(b);
+//                 done();
+//             })
+//         })
+//     })
+})
